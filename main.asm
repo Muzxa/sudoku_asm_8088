@@ -2,7 +2,7 @@
 
 jmp start
 
-off_screen_buffer: times 240 dw 0
+off_screen_buffer: times 2000 dw 0
 
 sudoku:         db 'SUDOKU', 0
 play_game:      db 'PLAY  GAME', 0
@@ -21,10 +21,9 @@ on_s            db 'ON', 0
 game_over_s:    db 'GAME OVER', 0
 time_elapsed_s: db 'TIME ELAPSED:  0:00', 0
 
-
 difficulty:   dw 0
-score:        dw 2500
-mistakes:     dw 3
+score:        dw 0
+mistakes:     dw 0
 max_mistakes: db '0'
 timer:        db '0:00', 0
 mode_text:    dw 0
@@ -42,7 +41,7 @@ draw_line:
   push es
   push di
 
-  mov  ax, 0xb800
+  mov  ax, ds
   mov  es, ax
 
   mov  ax, 80
@@ -54,6 +53,7 @@ draw_line:
   add ax, cx
 
   mov  di, ax        ;MOVE POINTER LOCATION TO di
+  add di, off_screen_buffer
   mov  cx, [bp + 10] ;MOVE LENGTH INTO si
 
   mov  ax, [bp + 8]  ;MOVE THE FORMAT INTO ax
@@ -103,7 +103,7 @@ print_text:
   je number_mode
 
   text_mode:
-    mov  ax, 0xb800
+    mov  ax, ds
     mov  es, ax
 
     ;SCREEN LOCATION CALCULATION
@@ -114,6 +114,7 @@ print_text:
     shl di, 1
     add ax, di
     mov  di, ax        ;MOVE POINTER LOCATION TO di
+    add  di, off_screen_buffer
 
     mov  si, [bp + 10] ;MOVE THE START OF WORD INTO si
     mov  ax, [bp + 8]  ;MOVE THE FORMAT INTO ax
@@ -178,6 +179,32 @@ print_text:
 
 ret 10
 
+move_buffer_to_screen:
+
+  push ds
+  push si
+  push es
+  push di
+  push ax
+  push cx
+
+  mov si, off_screen_buffer
+  mov ax, 0xb800
+  mov es, ax
+  mov di, 0
+  mov cx, 2000
+
+  cld
+  rep movsw
+
+  pop cx
+  pop ax
+  pop di
+  pop es
+  pop si
+  pop ds
+ret
+
 sleep: 
 
   push bp
@@ -190,6 +217,34 @@ sleep:
   pop    bp
 
 ret 2
+
+draw_bg_to_buffer:   
+  push bp
+  mov  bp, sp
+
+  push es
+  push ax
+  push di
+  push si
+  push cx
+
+  mov ax, ds
+  mov es, ax
+  mov di, off_screen_buffer
+
+  mov ax, [bp + 6]
+  mov cx, 2000
+
+  cld 
+  rep stosw
+
+  pop cx
+  pop si
+  pop di
+  pop ax
+  pop es
+  pop bp
+ret 4
 
 draw_bg:   
   push bp
@@ -206,16 +261,10 @@ draw_bg:
   mov di, 0
 
   mov ax, [bp + 6]
-  mov cx, [bp + 4]
-  
+  mov cx, 2000
 
-  next: 
-    push cx
-    call sleep
-    mov  word [es:di], ax   ; clear next char on screen
-    add  di, 2
-    cmp  di, 4000
-  jbe  next
+  cld 
+  rep stosw
 
   pop cx
   pop si
@@ -275,6 +324,8 @@ draw_mm:
   push word 38
   push word 14
   call print_text
+
+  call move_buffer_to_screen
 
   pop es
   pop ax
@@ -348,6 +399,8 @@ draw_ls:
   push word 14
   call print_text
 
+  call move_buffer_to_screen
+
   pop es
   pop ax
 
@@ -406,6 +459,8 @@ draw_es:
   push word [bp - 2]
   push word [bp - 4]
   call print_text
+
+  call move_buffer_to_screen
   
   ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   pop es
@@ -554,6 +609,7 @@ draw_gs_te:
   push word [bp - 2]
   call print_text
 
+  call move_buffer_to_screen
   ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   pop dx
   pop cx
@@ -764,7 +820,6 @@ draw_gs:
     call draw_bg
 
     pop bp
-
   ret
 
   refresh_screen:
@@ -777,18 +832,33 @@ draw_gs:
     call draw_bg
     
     pop bp
+  ret
 
-    ret
+  refresh_buffer:
+
+    push bp
+    mov bp, sp
+
+    push 0111111100000000b
+    push 01h
+    call draw_bg_to_buffer
+    
+    pop bp
+  ret
+
+  clear_buffer:
+
+    push bp
+    mov bp, sp
+
+    push 0000111100000000b
+    push 01h
+    call draw_bg_to_buffer
+
+    pop bp
+  ret
 
 start:
-  ;call clear_screen
-  ;call draw_image
-  ;
-  ;title_screen_il:
-  ;mov ah, 0x00
-  ;int 16h
-  ;cmp ah, 0x1c
-  ;jne title_screen_il
 
   mov ah, 00h
   mov al, 03h
@@ -796,7 +866,7 @@ start:
 
   main_menu_ol:
   mov word [gen_flag], 0
-  call refresh_screen
+  call refresh_buffer
   call draw_mm
 
   main_menu_il:
@@ -820,7 +890,7 @@ start:
   cmp word [gen_flag], 0x0001
   je  game_end
 
-  call refresh_screen
+  call refresh_buffer
   call draw_ls
   mov word [gen_flag], 0
   
@@ -854,7 +924,7 @@ start:
       cmp ah, 0x1c
       jne ls_il
 
-  call refresh_screen
+  call refresh_buffer
   push word 2
   call draw_gs
 
@@ -875,7 +945,7 @@ start:
      xor word [scroll_flag], 1
     
     draw_gs_game_loop:
-     call refresh_screen
+     call refresh_buffer
      inc word [scroll_flag]
      push word [scroll_flag]
      dec word [scroll_flag]
@@ -885,7 +955,7 @@ start:
      cmp ah, 0x1c
   jne game_loop 
      
-  call refresh_screen
+  call refresh_buffer
   call draw_es
 
   es_il:
