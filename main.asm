@@ -3,6 +3,7 @@
 jmp start
 
 off_screen_buffer: times 2000 dw 0
+overflow_buffer: times 20 dw 0
 
 sudoku:         db 'SUDOKU', 0
 play_game:      db 'PLAY  GAME', 0
@@ -20,6 +21,7 @@ off_s           db 'OFF', 0
 on_s            db 'ON', 0
 game_over_s:    db 'GAME OVER', 0
 time_elapsed_s: db 'TIME ELAPSED:  0:00', 0
+colon:          db ':', 0
 
 difficulty:   dw 0
 score:        dw 0
@@ -27,12 +29,25 @@ mistakes:     dw 0
 max_mistakes: db '0'
 timer:        db '0:00', 0
 mode_text:    dw 0
-mode_number   dw 1
+mode_number:  dw 1
 
-gen_flag: dw 0
-scroll_flag: dw 1
+number_cards: dw 1, 2, 3, 4, 5, 6, 7, 8, 9
+curr_index:   dw 0
+
+gen_flag:     dw 0
+scroll_flag:  dw 1
+ncs_flag:     dw 0
+
+main_theme: equ 0111000000000000b
 
 draw_line:
+
+  ;PASSED PARAMETERS
+  ;[bp + 12] [1ST PARAM] - VERTICAL MODE (160) OR HORIZONTAL MODE (2)
+  ;[bp + 10] [2ND PARAM] - LENGTH OF THE LINE
+  ;[bp + 8]  [3RD PARAM] - FORMAT OF THE LINE
+  ;[bp + 6]  [4TH PARAM] - X-COORDINATE OF THE LINE
+  ;[bp + 4]  [5TH PARAM] - Y-COORDINATE OF THE LINE
 
   push bp
   mov  bp, sp
@@ -45,18 +60,14 @@ draw_line:
   mov  es, ax
 
   mov  ax, 80
-  mul  byte [bp + 4] ;MULTIPLY BY VERTICAL COORDINATES
+  mul  byte [bp + 4]
+  add ax, [bp + 6]  
   shl ax, 1
-
-  mov  cx, [bp + 6]  ;ADD HORIZONTAL COORDINATES, TWICE
-  shl cx, 1
-  add ax, cx
-
-  mov  di, ax        ;MOVE POINTER LOCATION TO di
+  mov  di, ax     
   add di, off_screen_buffer
-  mov  cx, [bp + 10] ;MOVE LENGTH INTO si
 
-  mov  ax, [bp + 8]  ;MOVE THE FORMAT INTO ax
+  mov  cx, [bp + 10] 
+  mov  ax, [bp + 8] 
 
   l_print_loop:
     mov [es:di], ax
@@ -68,7 +79,6 @@ draw_line:
   pop cx
   pop ax
   pop bp
-
 ret 10
 
 print_text:
@@ -99,20 +109,56 @@ print_text:
   push si
 
   ;FUNCTION START
-  cmp word [bp + 12], 1
-  je number_mode
+  cmp word [bp + 12], 0
+  je text_mode
+
+  number_mode:
+
+  mov si, [bp + 10]
+  mov ax, [si]
+  xor cx, cx
+
+  stack_push_loop:
+
+    div byte [bp - 2]
+    mov dl, ah
+    xor dh, dh
+    add dx, '0'
+    push dx
+    xor ah, ah
+    inc cx
+    cmp ax, 0
+  jne stack_push_loop
+
+  mov ax, sp
+  mov dx, cx
+
+  number_print_loop:
+    
+    push word [mode_text]
+    push ax
+    push word [bp + 8]
+    push word [bp + 6]
+    inc word [bp + 6]
+    push word [bp + 4]
+    call print_text
+    add ax, 2
+  loop number_print_loop
+
+  sub word [bp + 6], dx
+  shl dx, 1
+  add sp, dx
+  jmp print_text_end
 
   text_mode:
     mov  ax, ds
     mov  es, ax
 
     ;SCREEN LOCATION CALCULATION
-    mov  ax, 80
-    shl  ax, 1
-    mul  byte [bp + 4] ;MULTIPLY BY VERTICAL COORDINATES
-    mov di, [bp + 6]   ;ADD HORIZONTAL COORDINATES, TWICE
-    shl di, 1
-    add ax, di
+    mov ax, 80
+    mul byte [bp + 4] ;MULTIPLY BY VERTICAL COORDINATES
+    add ax, [bp + 6]   ;ADD HORIZONTAL COORDINATES, TWICE
+    shl ax, 1
     mov  di, ax        ;MOVE POINTER LOCATION TO di
     add  di, off_screen_buffer
 
@@ -121,53 +167,13 @@ print_text:
     
     text_print_loop:
       mov al, [si]
-      mov [es:di], ax
-      add di, 2
+      stosw
       inc si
       cmp byte [si], 0
   jne text_print_loop
-  jmp print_text_end
-
-  number_mode:
-
-    mov si, [bp + 10]
-    mov ax, [si]
-    xor cx, cx
-
-    stack_push_loop:
-
-      div byte [bp - 2]
-      mov dl, ah
-      xor dh, dh
-      add dx, '0'
-      push dx
-      xor ah, ah
-      inc cx
-      cmp ax, 0
-    jne stack_push_loop
-
-    mov ax, sp
-    mov dx, cx
-
-    number_print_loop:
-      
-      push word [mode_text]
-      push ax
-      push word [bp + 8]
-      push word [bp + 6]
-      inc word [bp + 6]
-      push word [bp + 4]
-      call print_text
-      add ax, 2
-    loop number_print_loop
-
-    sub word [bp + 6], dx
-    shl dx, 1
-    add sp, dx
 
   ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   print_text_end:
-
   pop si
   pop di
   pop es
@@ -176,7 +182,6 @@ print_text:
   pop ax
   add sp, 2
   pop bp
-
 ret 10
 
 move_buffer_to_screen:
@@ -215,7 +220,6 @@ sleep:
   delay: loop delay
   pop    cx
   pop    bp
-
 ret 2
 
 draw_bg_to_buffer:   
@@ -272,7 +276,6 @@ draw_bg:
   pop ax
   pop es
   pop bp
-
 ret 4
 
 draw_mm:
@@ -290,7 +293,7 @@ draw_mm:
 
   push word [mode_text]
   push sudoku
-  push word 0111000000000000b
+  push word main_theme
   push word 37
   push word 11
   call print_text
@@ -330,8 +333,7 @@ draw_mm:
   pop es
   pop ax
   pop bp
-
-  ret
+ret
 
 draw_ls:
 
@@ -348,7 +350,7 @@ draw_ls:
 
   push word [mode_text]
   push level_select
-  push word 0111000000000000b
+  push word main_theme
   push word 34
   push word 10
   call print_text
@@ -405,7 +407,6 @@ draw_ls:
   pop ax
 
   pop bp
-
 ret
 
 draw_es:
@@ -430,19 +431,14 @@ draw_es:
   push bp
   mov  bp, sp
   sub sp, 8
-  push ax
   push es
   
   mov word [bp - 2], 37
   mov word [bp - 4], 11
-  mov word [bp - 6], 0111000000000000b
+  mov word [bp - 6], main_theme
   mov word [bp - 8], 1111110000000000b
   
   ;FUNCTION START
-  mov ax, 0xb800
-  mov es, ax
-  mov ah, 01110000b
-  
   push word [mode_text]
   push word game_over_s
   push word [bp - 6]
@@ -464,10 +460,8 @@ draw_es:
   
   ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   pop es
-  pop ax
   add sp, 8
   pop bp
-
 ret
 
 draw_gs_te:
@@ -609,7 +603,6 @@ draw_gs_te:
   push word [bp - 2]
   call print_text
 
-  call move_buffer_to_screen
   ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   pop dx
   pop cx
@@ -617,8 +610,88 @@ draw_gs_te:
   pop ax
   add sp, 4
   pop bp
+ret 6
 
-  ret 6
+draw_ncs:
+  ;NAME: DRAW_NCS (DRAW NUMBER CARD SCREEN)
+
+  ;PASSED PARAMETERS
+  ;[bp + 8] - FORMAT 
+  ;[bp + 6] - X-COORDINATE OF VERTICAL DIVIDER LINE 
+  ;[bp + 4] - Y-COORDINATE OF HORIZONTAL DIVIDER LINE
+
+  ;LOCAL VARIABLES
+  ;[bp - 2] - ROW INDEX OF NEXT AVAILABLE LINE
+  ;[bp - 4] - OFFSET FROM STARTING POINT
+
+  ;PASSED PARAMETERS
+  ;[bp + 12][1ST PARAM] - STRING MODE (0) OR NUMBER MODE (1)
+  ;[bp + 10][2ND PARAM] - TEXT TO PRINT
+  ;[bp + 8] [3RD PARAM] - TEXT FORMAT
+  ;[bp + 6] [4TH PARAM] - X-COORDINATE OF STARTING POINT
+  ;[bp + 4] [5TH PARAM] - Y-COORDINATE OF STARTING POINT
+   
+  ;SAVING REGISTERS AND INITIALIZING LOCAL VARIABLES
+  push bp
+  mov bp, sp
+  sub sp, 4
+  push ax
+  push bx
+  push cx
+  push dx
+
+  mov word [bp - 2], 1
+  mov word [bp - 4], 5
+  
+  ;FUNCTION START
+  mov word [curr_index], 0 
+  mov cx, 9
+
+  ncs_print_loop:
+    mov ax, [bp + 6]
+    add ax, [bp - 4]
+    inc word [curr_index]
+
+    push 1
+    push word curr_index
+    push main_theme
+    push ax
+    push word [bp - 2]
+    call print_text
+
+    inc ax
+
+    push 0
+    push word colon
+    push main_theme
+    push ax
+    push word [bp - 2]
+    call print_text
+
+    add ax, 2
+    mov bx, [curr_index]
+    shl bx, 1
+    add bx, number_cards
+    sub bx, 2
+
+    push 1
+    push bx
+    push main_theme
+    push ax
+    push word [bp - 2]
+    call print_text
+
+    add word [bp - 2], 2
+  loop ncs_print_loop
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  pop dx
+  pop cx
+  pop bx
+  pop ax
+  add sp, 4
+  pop bp
+ret 6
 
 draw_gs:
   ;NAME : DRAW_GS (DRAW GAMESPACE)
@@ -664,7 +737,7 @@ draw_gs:
   mov word [bp - 6],  61
   mov word [bp - 8],  25
   mov word [bp - 10], 0000000000000000b
-  mov word [bp - 12], 0111000000000000b
+  mov word [bp - 12], main_theme
   mov word [bp - 18], 59
 
   mov al, 12
@@ -798,8 +871,19 @@ draw_gs:
   
   push word [bp - 12]
   push word [bp - 6] 
-  push word [bp - 8] 
+  push word [bp - 8]
+
+  cmp word [ncs_flag], 0
+  jne skip_gs_te_call
+
   call draw_gs_te
+  jmp move_gs_to_screen
+
+  skip_gs_te_call:
+    call draw_ncs
+
+  move_gs_to_screen:
+    call move_buffer_to_screen
 
   ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   pop dx
@@ -807,56 +891,98 @@ draw_gs:
   pop ax
   add sp, 18
   pop bp
+ret 2
 
-  ret 2
+refresh_side_screen:
 
-  clear_screen:
+  ;PASSED PARAMETERS
+  ;N/A
 
-    push bp
-    mov bp, sp
+  ;LOCAL VARIABLES
+  ;[bp - 2]  - X-COORDINATE OF STARTING POINT
+  ;[bp - 4]  - LENGTH OF THE LINE
 
-    push 0000111100000000b
-    push 01h
-    call draw_bg
+  ;PARAMETERS FOR DRAW_LINE FUNCTION
+  ;[bp + 12] [1ST PARAM] - VERTICAL MODE (160) OR HORIZONTAL MODE (2)
+  ;[bp + 10] [2ND PARAM] - LENGTH OF THE LINE
+  ;[bp + 8]  [3RD PARAM] - FORMAT OF THE LINE
+  ;[bp + 6]  [4TH PARAM] - X-COORDINATE OF THE LINE
+  ;[bp + 4]  [5TH PARAM] - Y-COORDINATE OF THE LINE
 
-    pop bp
-  ret
+  ;SAVING REGISTERS AND INITIALIZING LOCAL VARIABLES
+  push bp
+  mov bp, sp
+  sub sp, 4
+  mov word [bp - 2], 63
+  mov word [bp - 4], 25
 
-  refresh_screen:
+  ;FUNCTION START
+  refresh_side_screen_loop:
+  push 160
+  push word [bp - 4]
+  push 0111111100000000b
+  push word [bp - 2]
+  push 0
+  call draw_line
 
-    push bp
-    mov bp, sp
+  inc word [bp - 2]
+  cmp word [bp - 2], 80
+  jb refresh_side_screen_loop
 
-    push 0111111100000000b
-    push 01h
-    call draw_bg
-    
-    pop bp
-  ret
+  call move_buffer_to_screen
+  
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  add sp, 4
+  pop bp
+ret
 
-  refresh_buffer:
+clear_screen:
 
-    push bp
-    mov bp, sp
+  push bp
+  mov bp, sp
 
-    push 0111111100000000b
-    push 01h
-    call draw_bg_to_buffer
-    
-    pop bp
-  ret
+  push 0000111100000000b
+  push 01h
+  call draw_bg
 
-  clear_buffer:
+  pop bp
+ret
 
-    push bp
-    mov bp, sp
+refresh_screen:
 
-    push 0000111100000000b
-    push 01h
-    call draw_bg_to_buffer
+  push bp
+  mov bp, sp
 
-    pop bp
-  ret
+  push 0111111100000000b
+  push 01h
+  call draw_bg
+  
+  pop bp
+ret
+
+refresh_buffer:
+
+  push bp
+  mov bp, sp
+
+  push 0111111100000000b
+  push 01h
+  call draw_bg_to_buffer
+  
+  pop bp
+ret
+
+clear_buffer:
+
+  push bp
+  mov bp, sp
+
+  push 0000111100000000b
+  push 01h
+  call draw_bg_to_buffer
+
+  pop bp
+ret
 
 start:
 
@@ -938,11 +1064,19 @@ start:
     cmp ah, 0x48
     je flip_scroll_flag
 
+    cmp ah, 46
+    je flip_ncs_flag
+
     cmp ah, 0x50
     jne enter_key_check
 
     flip_scroll_flag:
      xor word [scroll_flag], 1
+    jmp draw_gs_game_loop
+
+    flip_ncs_flag:
+      xor word [ncs_flag], 1
+    jmp draw_gs_game_loop
     
     draw_gs_game_loop:
      call refresh_buffer
@@ -966,11 +1100,10 @@ start:
   jne es_il
   jmp main_menu_ol
 
-game_end:
-  call clear_screen
-
-  mov ax, 0x4c00
-  int 0x21
+  game_end:
+    call clear_screen
+mov ax, 0x4c00
+int 0x21
 
 ;COMMON SCAN CODES
 ; ENTER - 0x1C
