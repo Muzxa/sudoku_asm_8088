@@ -21,26 +21,34 @@ off_s           db 'OFF', 0
 on_s            db 'ON', 0
 game_over_s:    db 'GAME OVER', 0
 time_elapsed_s: db 'TIME ELAPSED:  0:00', 0
+number_cards_s: db 'NUMBER CARDS', 0
 colon:          db ':', 0
 
-difficulty:   dw 0
-score:        dw 0
-mistakes:     dw 0
-max_mistakes: db '0'
-timer:        db '0:00', 0
-mode_text:    dw 0
-mode_number:  dw 1
+difficulty:     dw 0
+score:          dw 0
+mistakes:       dw 0
+max_mistakes:   db '0'
+timer:          db '0:00', 0
+mode_text:      dw 0
+mode_number:    dw 1
 
-number_cards: dw 1, 2, 3, 4, 5, 6, 7, 8, 9
-curr_index:   dw 0
+number_cards:   dw 1, 2, 3, 4, 5, 6, 7, 8, 9
+curr_index:     dw 0
 
-gen_flag:     dw 0
-scroll_flag:  dw 1
-ncs_flag:     dw 0
+gen_flag:       dw 0
+scroll_flag:    dw 1
+ncs_flag:       dw 0
 
-main_theme: equ 0111000000000000b
+main_theme:     equ 0111000000000000b
+
+tickcount:    dw   0
+seconds:      dw   0
+minutes:      dw   0
+zero:         dw   0
+oldisr:       dd   0
 
 draw_line:
+  ;FUNCTION NAME: DRAW_LINE
 
   ;PASSED PARAMETERS
   ;[bp + 12] [1ST PARAM] - VERTICAL MODE (160) OR HORIZONTAL MODE (2)
@@ -49,6 +57,10 @@ draw_line:
   ;[bp + 6]  [4TH PARAM] - X-COORDINATE OF THE LINE
   ;[bp + 4]  [5TH PARAM] - Y-COORDINATE OF THE LINE
 
+  ;LOCAL VARIABLES
+  ;N/A
+
+  ;SAVING REGISTERS AND INITIALIZING LOCAL VARIABLES
   push bp
   mov  bp, sp
   push ax
@@ -56,6 +68,7 @@ draw_line:
   push es
   push di
 
+  ;FUNCTION START
   mov  ax, ds
   mov  es, ax
 
@@ -74,6 +87,7 @@ draw_line:
     add di, [bp + 12]
   loop l_print_loop
 
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   pop di
   pop es
   pop cx
@@ -154,16 +168,15 @@ print_text:
     mov  ax, ds
     mov  es, ax
 
-    ;SCREEN LOCATION CALCULATION
     mov ax, 80
-    mul byte [bp + 4] ;MULTIPLY BY VERTICAL COORDINATES
-    add ax, [bp + 6]   ;ADD HORIZONTAL COORDINATES, TWICE
+    mul byte [bp + 4] 
+    add ax, [bp + 6]   
     shl ax, 1
-    mov  di, ax        ;MOVE POINTER LOCATION TO di
+    mov  di, ax        
     add  di, off_screen_buffer
 
-    mov  si, [bp + 10] ;MOVE THE START OF WORD INTO si
-    mov  ax, [bp + 8]  ;MOVE THE FORMAT INTO ax
+    mov  si, [bp + 10] 
+    mov  ax, [bp + 8] 
     
     text_print_loop:
       mov al, [si]
@@ -185,7 +198,15 @@ print_text:
 ret 10
 
 move_buffer_to_screen:
+  ;FUNCTION NAME: MOVE_BUFFER_TO_SCREEN (MOVE BUFFER TO SCREEN)
 
+  ;PASSED PARAMETERS
+  ;N/A
+
+  ;LOCAL VARIABLES
+  ;N/A
+
+  ;SAVING REGISTERS AND INITIALIZING LOCAL VARIABLES
   push ds
   push si
   push es
@@ -193,6 +214,7 @@ move_buffer_to_screen:
   push ax
   push cx
 
+  ;FUNCTION START
   mov si, off_screen_buffer
   mov ax, 0xb800
   mov es, ax
@@ -202,6 +224,7 @@ move_buffer_to_screen:
   cld
   rep movsw
 
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   pop cx
   pop ax
   pop di
@@ -211,6 +234,13 @@ move_buffer_to_screen:
 ret
 
 sleep: 
+  ;FUNCTION NAME: SLEEP (DELAY FUNCTION)
+
+  ;PASSED PARAMETERS
+  ;[bp + 4][1ST PARAM] - NUMBER OF LOOPS (DELAY)
+
+  ;LOCAL VARIABLES
+  ;N/A
 
   push bp
   mov  bp, sp
@@ -222,7 +252,17 @@ sleep:
   pop    bp
 ret 2
 
-draw_bg_to_buffer:   
+draw_bg_to_buffer: 
+  ;FUNCTION NAME: DRAW_BG_TO_BUFFER (DRAW BACKGROUND TO BUFFER)
+
+  ;PASSED PARAMETERS
+  ;[bp + 6][1ST PARAM] - FORMAT OF THE BACKGROUND
+  ;[bp + 4][2ND PARAM] - COLOR OF THE BACKGROUND
+
+  ;LOCAL VARIABLES
+  ;N/A
+
+  ;SAVING REGISTERS AND INITIALIZING LOCAL VARIABLES  
   push bp
   mov  bp, sp
 
@@ -232,6 +272,7 @@ draw_bg_to_buffer:
   push si
   push cx
 
+  ;FUNCTION START
   mov ax, ds
   mov es, ax
   mov di, off_screen_buffer
@@ -242,6 +283,7 @@ draw_bg_to_buffer:
   cld 
   rep stosw
 
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   pop cx
   pop si
   pop di
@@ -251,6 +293,16 @@ draw_bg_to_buffer:
 ret 4
 
 draw_bg:   
+  ;FUNCTION NAME: DRAW_BG (DRAW BACKGROUND)
+
+  ;PASSED PARAMETERS
+  ;[bp + 6][1ST PARAM] - FORMAT OF THE BACKGROUND
+  ;[bp + 4][2ND PARAM] - COLOR OF THE BACKGROUND
+
+  ;LOCAL VARIABLES
+  ;N/A
+
+  ;SAVING REGISTERS AND INITIALIZING LOCAL VARIABLES
   push bp
   mov  bp, sp
 
@@ -260,6 +312,7 @@ draw_bg:
   push si
   push cx
 
+  ;FUNCTION START
   mov ax, 0xb800
   mov es, ax
   mov di, 0
@@ -270,6 +323,7 @@ draw_bg:
   cld 
   rep stosw
 
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   pop cx
   pop si
   pop di
@@ -279,13 +333,29 @@ draw_bg:
 ret 4
 
 draw_mm:
+  ;FUNCTION NAME: DRAW_MM (DRAW MAIN MENU)
 
+  ;PASSED PARAMETERS
+  ;N/A
+
+  ;LOCAL VARIABLES
+  ;N/A
+
+  ;PARAMETERS FOR PRINT_TEXT FUNCTION
+  ;[bp + 12][1ST PARAM] - STRING MODE (0) OR NUMBER MODE (1)
+  ;[bp + 10][2ND PARAM] - TEXT TO PRINT
+  ;[bp + 8] [3RD PARAM] - TEXT FORMAT
+  ;[bp + 6] [4TH PARAM] - X-COORDINATE OF STARTING POINT
+  ;[bp + 4] [5TH PARAM] - Y-COORDINATE OF STARTING POINT
+
+  ;SAVING REGISTERS AND INITIALIZING LOCAL VARIABLES
   push bp
   mov  bp, sp
 
   push ax
   push es
 
+  ;FUNCTION START
   mov ax, 0xb800
   mov es, ax
 
@@ -330,19 +400,36 @@ draw_mm:
 
   call move_buffer_to_screen
 
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   pop es
   pop ax
   pop bp
 ret
 
 draw_ls:
+  ;FUNCTION NAME: DRAW_LS (DRAW LEVEL SELECT)
 
+  ;PASSED PARAMETERS
+  ;N/A
+
+  ;LOCAL VARIABLES
+  ;N/A
+
+  ;PARAMETERS FOR PRINT_TEXT FUNCTION
+  ;[bp + 12][1ST PARAM] - STRING MODE (0) OR NUMBER MODE (1)
+  ;[bp + 10][2ND PARAM] - TEXT TO PRINT
+  ;[bp + 8] [3RD PARAM] - TEXT FORMAT
+  ;[bp + 6] [4TH PARAM] - X-COORDINATE OF STARTING POINT
+  ;[bp + 4] [5TH PARAM] - Y-COORDINATE OF STARTING POINT
+
+  ;SAVING REGISTERS AND INITIALIZING LOCAL VARIABLES
   push bp
   mov  bp, sp
 
   push ax
   push es
 
+  ;FUNCTION START
   mov ax, 0xb800
   mov es, ax
 
@@ -403,6 +490,7 @@ draw_ls:
 
   call move_buffer_to_screen
 
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   pop es
   pop ax
 
@@ -528,14 +616,11 @@ draw_gs_te:
 
   add word [bp - 2], 1
 
-  push word [mode_text]
-  push timer
-  push word [bp + 8]
   mov dx, [bp + 6]
   add dx, [bp - 4]
   push dx
   push word [bp - 2]
-  call print_text
+  call draw_timer
 
   add word [bp - 2], 2
 
@@ -644,6 +729,7 @@ draw_ncs:
   mov word [bp - 4], 5
   
   ;FUNCTION START
+
   mov word [curr_index], 0 
   mov cx, 9
 
@@ -894,6 +980,7 @@ draw_gs:
 ret 2
 
 refresh_side_screen:
+  ;NAME: REFRESH_SIDE_SCREEN (REFRESH SIDE SCREEN)
 
   ;PASSED PARAMETERS
   ;N/A
@@ -937,51 +1024,297 @@ refresh_side_screen:
 ret
 
 clear_screen:
+  ;FUNCTION NAME: CLEAR_SCREEN (CLEAR SCREEN)
 
+  ;PASSED PARAMETERS
+  ;N/A
+
+  ;LOCAL VARIABLES
+  ;N/A
+
+  ;PARAMETERS FOR DRAW_BG FUNCTION
+  ;[bp + 6][1ST PARAM] - FORMAT OF THE BACKGROUND
+  ;[bp + 4][2ND PARAM] - COLOR OF THE BACKGROUND
+
+  ;SAVING REGISTERS AND INITIALIZING LOCAL VARIABLES
   push bp
   mov bp, sp
 
+  ;FUNCTION START
   push 0000111100000000b
   push 01h
   call draw_bg
 
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   pop bp
 ret
 
 refresh_screen:
+  ;FUNCTION NAME: REFRESH_SCREEN (REFRESH SCREEN)
 
+  ;PASSED PARAMETERS
+  ;N/A
+
+  ;LOCAL VARIABLES
+  ;N/A
+
+  ;PARAMETERS FOR MOVE_BUFFER_TO_SCREEN FUNCTION
   push bp
   mov bp, sp
 
+  ;FUNCTION START
   push 0111111100000000b
   push 01h
   call draw_bg
   
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   pop bp
 ret
 
 refresh_buffer:
+  ;FUNCTION NAME: REFRESH_BUFFER (REFRESH BUFFER)
+
+  ;PASSED PARAMETERS
+  ;N/A
+
+  ;LOCAL VARIABLES
+  ;N/A
+
+  ;PARAMETERS FOR DRAW_BG_TO_BUFFER FUNCTION
+  ;[bp + 6][1ST PARAM] - FORMAT OF THE BACKGROUND
+  ;[bp + 4][2ND PARAM] - COLOR OF THE BACKGROUND
 
   push bp
   mov bp, sp
 
+  ;FUNCTION START
   push 0111111100000000b
   push 01h
   call draw_bg_to_buffer
   
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   pop bp
 ret
 
 clear_buffer:
+  ;FUNCTION NAME: CLEAR_BUFFER (CLEAR BUFFER)
 
+  ;PASSED PARAMETERS
+  ;N/A
+
+  ;LOCAL VARIABLES
+  ;N/A
+
+  ;PARAMETERS FOR DRAW_BG_TO_BUFFER FUNCTION
+  ;[bp + 6][1ST PARAM] - FORMAT OF THE BACKGROUND
+  ;[bp + 4][2ND PARAM] - COLOR OF THE BACKGROUND
+
+  ;SAVING REGISTERS AND INITIALIZING LOCAL VARIABLES
   push bp
   mov bp, sp
 
+  ;FUNCTION START
   push 0000111100000000b
   push 01h
   call draw_bg_to_buffer
 
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   pop bp
+ret
+
+draw_timer:
+  ;FUNCTION NAME: DRAW_TIMER (DRAW TIMER)
+
+  ;PASSED PARAMETERS
+  ;[bp + 6][1ST PARAM] - X-COORDINATE OF STARTING POINT
+  ;[bp + 4][2ND PARAM] - Y-COORDINATE OF STARTING POINT
+
+  ;LOCAL VARIABLES
+  ;N/A
+
+  ;PARAMETERS FOR PRINT_TEXT FUNCTION
+  ;[bp + 12][1ST PARAM] - STRING MODE (0) OR NUMBER MODE (1)
+  ;[bp + 10][2ND PARAM] - TEXT TO PRINT
+  ;[bp + 8] [3RD PARAM] - TEXT FORMAT
+  ;[bp + 6] [4TH PARAM] - X-COORDINATE OF STARTING POINT
+  ;[bp + 4] [5TH PARAM] - Y-COORDINATE OF STARTING POINT
+
+  ;SAVING REGISTERS AND INITIALIZING LOCAL VARIABLES
+  push bp
+  mov bp, sp
+
+  ;FUNCTION START
+  mov cx, [bp + 6]
+  add cx, 3
+
+  cmp word [seconds], 9
+  jg skip
+
+  push 1
+  push word zero
+  push 0111000000000000b
+  push cx
+  push word [bp + 4]
+  call print_text
+  inc cx
+  
+  skip:
+  push 1
+  push word minutes
+  push 0111000000000000b
+  push word [bp + 6]
+  push word [bp + 4]
+  call print_text
+
+  add word [bp + 6], 2
+
+  push 0
+  push word colon
+  push 0111000000000000b
+  push word [bp + 6]
+  push word [bp + 4]
+  call print_text
+  
+  push 1
+  push word seconds
+  push 0111000000000000b
+  push cx
+  push word [bp + 4]
+  call print_text
+
+  call move_buffer_to_screen
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  pop bp
+ret 4
+
+timer_isr:
+  ;FUNCTION NAME: TIMER_ISR (TIMER INTERRUPT SERVICE ROUTINE)
+
+  ;PASSED PARAMETERS
+  ;N/A
+
+  ;LOCAL VARIABLES
+  ;N/A
+
+  ;SAVING REGISTERS AND INITIALIZING LOCAL VARIABLES
+  push bp
+  mov bp, sp
+  
+  ;FUNCTION START
+  inc word [tickcount]
+  cmp word [tickcount], 18
+  jne skip_drawing_timer
+
+  inc word [seconds]
+  mov word [tickcount], 0
+
+  cmp word [seconds], 60
+  jne call_draw_timer
+
+  mov word [seconds], 0
+  inc word [minutes]
+
+  call_draw_timer:
+    cmp word [ncs_flag], 0
+    jne skip_drawing_timer
+
+    push word 66
+    push word 5
+    call draw_timer
+  
+  ;FUNCTION END - SIGNALING THE END OF THE INTERRUPT SERVICE ROUTINE
+  skip_drawing_timer:
+    mov  al, 0x20
+    out  0x20, al
+  pop bp
+iret
+
+hook_timer_interrupt:
+  ;FUNCTION NAME: HOOK_TIMER_INTERRUPT (HOOK TIMER INTERRUPT)
+
+  ;PASSED PARAMETERS
+  ;N/A
+
+  ;LOCAL VARIABLES
+  ;N/A
+
+  ;SAVING REGISTERS AND INITIALIZING LOCAL VARIABLES
+  push bp
+  mov bp, sp
+
+  push ds
+  push es
+  push ax
+  push bx
+
+  mov ax, 3508h      
+  int 21h
+  mov word [oldisr], bx  
+  mov word [oldisr+2], es 
+
+  xor  ax, ax
+  mov  es, ax
+
+  cli
+  mov word [es:8*4], timer_isr  
+  mov [es:8*4+2], cs      
+  sti
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  pop bx
+  pop ax
+  pop es
+  pop ds
+  pop bp
+ret
+
+unhook_timer_interrupt:
+  ;FUNCTION NAME: UNHOOK_TIMER_INTERRUPT (UNHOOK TIMER INTERRUPT)
+  
+  ;PASSED PARAMETERS
+  ;N/A
+
+  ;LOCAL VARIABLES
+  ;N/A
+
+  ;SAVING REGISTERS AND INITIALIZING LOCAL VARIABLES
+  push bp
+  mov bp, sp
+
+  push ds
+  push ax
+  push dx
+
+  cli
+  push ds
+  mov ax, 2508h      ; DOS function 25h to set interrupt vector for interrupt 08h
+  mov dx, [oldisr]   ; Load original ISR offset
+  mov ds, [oldisr+2] ; Load original ISR segment
+  int 21h
+  pop ds
+  sti
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  pop dx
+  pop ax
+  pop ds
+  pop bp
+ret
+
+clear_timer:
+  ;FUNCTION NAME: CLEAR_TIMER (CLEAR TIMER)
+
+  ;PASSED PARAMETERS
+  ;N/A
+
+  ;LOCAL VARIABLES
+  ;N/A
+
+  ;FUNCTION START
+  mov word [tickcount], 0
+  mov word [minutes], 0
+  mov word [seconds], 0
 ret
 
 start:
@@ -1050,6 +1383,9 @@ start:
       cmp ah, 0x1c
       jne ls_il
 
+  call clear_timer
+  call hook_timer_interrupt
+
   call refresh_buffer
   push word 2
   call draw_gs
@@ -1059,8 +1395,12 @@ start:
     int 16h                    
                                
     cmp ah, 0x01               
-    je  main_menu_ol    
+    jne skip_jumping_to_mm_game_loop   
+
+    call unhook_timer_interrupt
+    jmp main_menu_ol
     
+    skip_jumping_to_mm_game_loop:
     cmp ah, 0x48
     je flip_scroll_flag
 
@@ -1088,7 +1428,8 @@ start:
     enter_key_check:
      cmp ah, 0x1c
   jne game_loop 
-     
+  
+  call unhook_timer_interrupt
   call refresh_buffer
   call draw_es
 
@@ -1104,10 +1445,3 @@ start:
     call clear_screen
 mov ax, 0x4c00
 int 0x21
-
-;COMMON SCAN CODES
-; ENTER - 0x1C
-; BACKSPACE - 0x0E
-; SPACE - 0x39
-; UP ARROW - 0x48
-; DOWN ARROW - 0x50
