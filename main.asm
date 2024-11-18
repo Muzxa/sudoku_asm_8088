@@ -7,7 +7,7 @@ overflow_buffer: times 20 dw 0
 
 sudoku:         db 'SUDOKU', 0
 play_game:      db 'PLAY  GAME', 0
-exit:           db 'EXIT', 0
+exit_s:         db 'EXIT', 0
 level_select:   db 'LEVEL SELECT', 0
 easy:           db 'EASY', 0
 medium:         db 'MEDIUM', 0
@@ -41,11 +41,121 @@ ncs_flag:       dw 0
 
 main_theme:     equ 0111000000000000b
 
-tickcount:    dw   0
-seconds:      dw   0
-minutes:      dw   0
-zero:         dw   0
-oldisr:       dd   0
+tickcount:      dw 0
+seconds:        dw 0
+minutes:        dw 0
+zero:           dw 0
+
+oldisr:         dd 0
+oldkbisr:       dd 0
+
+cursor_row:     dw 0
+cursor_col:     dw 0
+
+right:         equ 1
+left:          equ 2
+up:            equ 3
+down:          equ 4
+
+draw_cursor:
+  ;FUNCTION NAME: DRAW_CURSOR
+
+  ;PASSED PARAMETERS
+  ;N/A
+
+  ;LOCAL VARIABLES
+  ;[bp - 2] - TEMP CURSOR ROW
+  ;[bp - 4] - TEMP CURSOR COLUMN
+  
+  push bp
+  mov bp, sp
+
+  sub sp, 4
+
+  push es
+  push di
+  push ax
+  push bx
+  push cx
+  push dx
+
+  ;FUNCTION START
+
+  mov ax, [cursor_row]
+  mov [bp - 2], ax
+
+  cmp word [cursor_row], 6
+  jb else_dc_3
+  sub word [bp - 2], 6
+
+  else_dc_3:
+  mov ax, [cursor_col]
+  mov [bp - 4], ax
+
+  mov ax, 4
+  mul byte [bp - 2]
+  mov cx, ax
+
+  mov ax, 6
+  mul byte [bp - 4]
+  mov dx, ax
+
+  cmp word [bp - 4], 3
+  jl else_dc_1
+  inc dx
+
+  else_dc_1:
+  cmp word [bp - 4], 6
+  jl else_dc_2
+  inc dx
+
+  else_dc_2:
+  push ds
+  pop es
+  mov ax, 80
+  mov bl, 2
+  add bl, cl
+  mul byte bl
+  add ax, 4
+  add ax, dx
+  shl ax, 1
+  mov di, ax
+  add di, off_screen_buffer
+
+  mov ah, 10011111b
+  mov al, '*'
+  mov [es:di], ax
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  pop dx
+  pop cx
+  pop bx
+  pop ax
+  pop di
+  pop es
+
+  add sp, 4
+
+  pop bp
+ret
+
+reset_cursor_position:
+  ;FUNCTION NAME: RESET_CURSOR_POSITION
+  ;PASSED PARAMETERS: N/A
+  ;LOCAL VARIABLES: N/A
+
+  cmp word [scroll_flag], 1
+  jne else_rsp
+  mov word [cursor_row], 0
+  mov word [cursor_col], 0
+  jmp exit_rsp
+
+  else_rsp:
+    mov word [cursor_row], 6
+    mov word [cursor_col], 0
+
+  exit_rsp:
+  ret
 
 draw_line:
   ;FUNCTION NAME: DRAW_LINE
@@ -392,7 +502,7 @@ draw_mm:
   skip_ef:
 
   push word [mode_text]
-  push exit
+  push exit_s
   push ax
   push word 38
   push word 14
@@ -954,6 +1064,8 @@ draw_gs:
   push dx
   push word 0
   call draw_line
+
+  call draw_cursor
   
   push word [bp - 12]
   push word [bp - 6] 
@@ -1230,6 +1342,82 @@ timer_isr:
   pop bp
 iret
 
+gs_kbisr:
+  ;FUNCTION NAME: GS_KBISR (GAMESPACE KEYBOARD INTERRUPT SERVICE ROUTINE)
+  ;PASSED PARAMETERS: N/A
+  ;LOCAL VARIABLES: N/A
+
+  ;SAVING REGISTERS AND INITIALIZING LOCAL VARIABLES
+  push bp
+  mov bp, sp
+
+  push ax
+  push es
+
+  ;FUNCTION START
+  in al, 0x60
+
+  cmp al, 0x11; W
+  jne nextcmp
+  cmp word [cursor_row], 0
+  jle exit_gs_kbisr
+  dec word [cursor_row]
+  cmp word [cursor_row], 5
+  jne draw_gs_kbisr
+  xor word [scroll_flag], 1
+  jmp draw_gs_kbisr
+
+nextcmp:
+  cmp al, 0x1E; A
+  jne nextcmp_2
+  cmp word [cursor_col], 0
+  jle exit_gs_kbisr
+  dec word [cursor_col]
+  jmp draw_gs_kbisr
+
+nextcmp_2:
+  cmp al, 0x1F ; S
+  jne nextcmp_3
+  cmp word [cursor_row], 8
+  jge exit_gs_kbisr
+  inc word [cursor_row]
+  cmp word [cursor_row], 6
+  jne draw_gs_kbisr
+  xor word [scroll_flag], 1
+  jmp draw_gs_kbisr
+
+nextcmp_3:
+  cmp al, 0x20; D
+  jne nomatch
+  cmp word [cursor_col], 8
+  jge exit_gs_kbisr
+  inc word [cursor_col]
+  jmp draw_gs_kbisr
+
+;IF NO MATCH, EXIT
+nomatch:
+  pop es
+  pop ax
+  pop bp
+  jmp far [cs:oldkbisr]
+
+;DRAW GAMESPACE
+draw_gs_kbisr:
+  call refresh_buffer
+  inc word [scroll_flag]
+  push word [scroll_flag]
+  dec word [scroll_flag]
+  call draw_gs
+
+;EXIT
+exit_gs_kbisr:
+  mov al, 0x20
+  out 0x20, al
+  pop es
+  pop ax
+  pop bp
+iret
+
 hook_timer_interrupt:
   ;FUNCTION NAME: HOOK_TIMER_INTERRUPT (HOOK TIMER INTERRUPT)
 
@@ -1288,9 +1476,9 @@ unhook_timer_interrupt:
 
   cli
   push ds
-  mov ax, 2508h      ; DOS function 25h to set interrupt vector for interrupt 08h
-  mov dx, [oldisr]   ; Load original ISR offset
-  mov ds, [oldisr+2] ; Load original ISR segment
+  mov ax, 2508h     
+  mov dx, [oldisr]   
+  mov ds, [oldisr+2]
   int 21h
   pop ds
   sti
@@ -1315,6 +1503,36 @@ clear_timer:
   mov word [tickcount], 0
   mov word [minutes], 0
   mov word [seconds], 0
+ret
+
+hook_gs_kbisr:
+
+  ;FUNCTION NAME: HOOK_GS_KBISR (HOOK GAMESPACE KEYBOARD INTERRUPT SERVICE ROUTINE)
+  ;PASSED PARAMETERS: N/A
+  ;LOCAL VARIABLES: N/A
+
+  ;SAVING REGISTERS AND INITIALIZING LOCAL VARIABLES
+  push ax
+  push es
+
+  ;FUNCTION START
+  xor ax, ax
+  mov es, ax
+
+  mov ax, [es: 9 * 4]
+  mov [oldkbisr], ax
+
+  mov ax, [es:9 * 4 + 2]
+  mov [oldkbisr + 2], ax
+
+  cli 
+  mov word [es:9 * 4], gs_kbisr
+  mov [es:9 * 4 + 2], cs
+  sti 
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  pop es
+  pop ax
 ret
 
 start:
@@ -1385,6 +1603,7 @@ start:
 
   call clear_timer
   call hook_timer_interrupt
+  call hook_gs_kbisr
 
   call refresh_buffer
   push word 2
@@ -1412,6 +1631,7 @@ start:
 
     flip_scroll_flag:
      xor word [scroll_flag], 1
+     call reset_cursor_position
     jmp draw_gs_game_loop
 
     flip_ncs_flag:
