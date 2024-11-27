@@ -56,12 +56,149 @@ right:         equ 1
 left:          equ 2
 up:            equ 3
 down:          equ 4
+current_grid_ptr: dw 0
+solution_grid_ptr: dw 0
 
-draw_cursor:
-  ;FUNCTION NAME: DRAW_CURSOR
+easy_grid:      db 0,3,2,0,0,0,0,5,7
+                db 7,4,5,0,1,8,0,0,6
+                db 1,0,0,7,0,3,2,8,0
+                db 3,0,8,0,0,0,4,0,5
+                db 4,0,9,1,0,0,0,0,0
+                db 0,6,1,0,0,4,9,0,0
+                db 2,5,7,6,0,0,0,0,1
+                db 9,8,0,0,3,0,6,0,0
+                db 0,1,0,8,0,0,0,0,9
+
+medium_grid:    db 4,0,0,0,6,0,9,0,0
+                db 0,0,0,0,4,3,6,8,0
+                db 0,8,0,7,0,1,2,0,4
+                db 0,0,0,0,8,0,4,0,0
+                db 0,9,0,0,0,7,1,6,0
+                db 7,6,0,0,1,0,0,3,0
+                db 0,0,1,0,0,9,0,0,0
+                db 3,0,9,0,0,0,0,0,0
+                db 0,5,6,0,0,0,8,0,1
+
+hard_grid:      db 0,5,1,0,9,0,0,2,6
+                db 9,0,0,8,1,7,0,0,0
+                db 4,0,0,0,0,0,0,0,1
+                db 0,6,0,4,0,2,0,1,0
+                db 3,0,0,0,0,1,0,0,0
+                db 0,0,7,0,3,8,2,0,4
+                db 0,0,0,0,0,0,4,7,0
+                db 0,3,0,5,0,0,1,0,0
+                db 0,0,0,7,0,0,5,3,0
+
+curr_grid:      times 81 db 0
+
+easy_grid_sol:  db 8,3,2,4,9,6,1,5,7
+                db 7,4,5,2,1,8,3,9,6
+                db 1,9,6,7,5,3,2,8,4
+                db 3,7,8,9,6,2,4,1,5
+                db 4,2,9,1,8,5,7,6,3
+                db 5,6,1,3,7,4,9,2,8
+                db 2,5,7,6,4,9,8,3,1
+                db 9,8,4,5,3,1,6,7,2
+                db 6,1,3,8,2,7,5,4,9
+
+medium_grid_sol:  db 4,2,7,8,6,5,9,1,3
+                  db 9,1,5,2,4,3,6,8,7
+                  db 6,8,3,7,9,1,2,5,4
+                  db 1,3,2,5,8,6,4,7,9
+                  db 5,9,8,4,3,7,1,6,2
+                  db 7,6,4,9,1,2,5,3,8
+                  db 8,7,1,6,2,9,3,4,5
+                  db 3,4,9,1,5,8,7,2,6
+                  db 2,5,6,3,7,4,8,9,1
+
+hard_grid_sol:  db 8,5,1,3,9,4,7,2,6
+                db 9,2,6,8,1,7,3,4,5
+                db 4,7,3,2,6,5,8,9,1
+                db 5,6,8,4,7,2,9,1,3
+                db 3,4,2,9,5,1,6,8,7
+                db 1,9,7,6,3,8,2,5,4
+                db 6,8,5,1,2,3,4,7,9
+                db 7,3,4,5,8,9,1,6,2
+                db 2,1,9,7,4,6,5,3,8
+
+set_number_cards:
+  ;FUNCTION NAME: SET_NUMBER_CARDS
+  ;PASSED PARAMETERS: N/A
+  ;LOCAL VARIABLES: N/A
+
+  push bp
+  mov bp, sp
+  push ax
+  push bx
+  push cx
+  push ds
+  push si
+  
+  ;FUNCTION START
+  xor ax, ax
+  mov si, [current_grid_ptr]
+  mov cx, 81
+
+  cld
+  loop_snc:
+    lodsb
+    cmp ax, 0
+    jle end_loop_snc
+    cmp ax, 9
+    jg end_loop_snc
+    mov bx, ax
+    dec bx
+    shl bx, 1
+    dec word [number_cards + bx]
+  end_loop_snc:
+  loop loop_snc
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  pop si
+  pop ds
+  pop cx
+  pop bx
+  pop ax
+  pop bp
+ret
+  
+reset_number_cards:
+  ;FUNCTION NAME: RESET_NUMBER_CARDS
+  ;PASSED PARAMETERS: N/A
+  ;LOCAL VARIABLES: N/A
+
+  push bp
+  mov bp, sp
+  push ax
+  push cx
+  push es
+  push di
+
+  ;FUNCTION START
+  push ds
+  pop es
+  mov di, number_cards
+  mov cx, 9
+  mov ax, 9
+
+  cld
+  rep stosw
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  pop di
+  pop es
+  pop cx
+  pop ax
+  pop bp
+ret
+
+draw_inside_grid:
+  ;FUNCTION NAME: DRAW_INSIDE_GRID
 
   ;PASSED PARAMETERS
-  ;N/A
+  ;[bp + 8] [1ST PARAM] - CHARACTER TO PRINT (ASCII)
+  ;[bp + 6] [2ND PARAM] - GRID ROW
+  ;[bp + 4] [3RD PARAM] - GRID COLUMN
 
   ;LOCAL VARIABLES
   ;[bp - 2] - TEMP CURSOR ROW
@@ -69,9 +206,7 @@ draw_cursor:
   
   push bp
   mov bp, sp
-
   sub sp, 4
-
   push es
   push di
   push ax
@@ -80,16 +215,15 @@ draw_cursor:
   push dx
 
   ;FUNCTION START
-
-  mov ax, [cursor_row]
+  mov ax, [bp + 6]
   mov [bp - 2], ax
 
-  cmp word [cursor_row], 6
+  cmp word [bp + 6], 6
   jb else_dc_3
   sub word [bp - 2], 6
 
   else_dc_3:
-  mov ax, [cursor_col]
+  mov ax, [bp + 4]
   mov [bp - 4], ax
 
   mov ax, 4
@@ -122,8 +256,7 @@ draw_cursor:
   mov di, ax
   add di, off_screen_buffer
 
-  mov ah, 10011111b
-  mov al, '*'
+  mov ax, [bp + 8]
   mov [es:di], ax
 
   ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
@@ -133,11 +266,9 @@ draw_cursor:
   pop ax
   pop di
   pop es
-
   add sp, 4
-
   pop bp
-ret
+ret 6
 
 reset_cursor_position:
   ;FUNCTION NAME: RESET_CURSOR_POSITION
@@ -155,7 +286,182 @@ reset_cursor_position:
     mov word [cursor_col], 0
 
   exit_rsp:
-  ret
+ret
+
+draw_grid:
+  ;FUNCTION NAME: DRAW_GRID
+
+  ;PASSED PARAMETERS:
+  ;[bp + 4] [1ST PARAM] - GRID TO DRAW (POINTER)
+
+  ;LOCAL VARIABLES: N/A
+
+  push bp
+  mov bp, sp
+  pusha
+
+  ;FUNCTION START
+  mov si, [bp + 4]
+  mov cx, 0
+  mov dx, 0
+
+  cmp word [scroll_flag], 1
+  jne draw_lower_half
+  
+  upper_half_ol:
+    
+    cmp byte [si], 0
+    je skip_printing_uh
+
+    mov al, [si]
+    add al, '0'
+    mov ah, 01110000b
+    push ax
+    push cx
+    push dx
+    call draw_inside_grid
+
+    skip_printing_uh:
+    inc si
+    inc dx
+    cmp dx, 9
+    jne skip_reset
+    mov dx, 0
+    inc cx
+    skip_reset:
+    cmp cx, 5
+    jbe upper_half_ol
+  jmp exit_dg
+
+  draw_lower_half:
+      add si, 54
+      mov cx, 6
+
+    lower_half_ol:
+      cmp byte [si], 0
+      je skip_printing_lh
+
+      mov al, [si]
+      add al, '0'
+      mov ah, 01110000b
+      push ax
+      push cx
+      push dx
+      call draw_inside_grid
+
+      skip_printing_lh:
+      inc si
+      inc dx
+      cmp dx, 9
+      jne skip_reset_lh
+      mov dx, 0
+      inc cx
+      skip_reset_lh:
+      cmp cx, 8
+    jbe lower_half_ol
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  exit_dg:
+  popa
+  pop bp
+  ret 2
+
+get_grid_value:
+  ;FUNCTION NAME: GET_GRID_VALUE
+
+  ;PASSED PARAMETERS
+  ;[bp + 10] [1ST PARAM] - RETURN VALUE
+  ;[bp + 8]  [2ND PARAM] - GRID TO READ (POINTER)
+  ;[bp + 6]  [3RD PARAM] - ROW OF THE GRID
+  ;[bp + 4]  [4TH PARAM] - COLUMN OF THE GRID
+
+  ;LOCAL VARIABLES: N/A
+
+  push bp 
+  mov bp, sp
+  pusha
+
+  ;FUNCTION START
+  mov ax, 9
+  mul byte [bp + 6]
+  add word ax, [bp + 4]
+  mov si, ax
+  add si, [bp + 8]
+
+  xor ax, ax
+  mov al, [si]
+  mov [bp + 10], ax
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  popa
+  pop bp
+ret 6
+
+set_grid_value:
+  ;FUNCTION NAME: SET_GRID_VALUE
+
+  ;PASSED PARAMETERS
+  ;[bp + 10] [1ST PARAM] - VALUE TO SET
+  ;[bp + 8]  [2ND PARAM] - GRID TO WRITE (POINTER)
+  ;[bp + 6]  [3RD PARAM] - ROW OF THE GRID
+  ;[bp + 4]  [4TH PARAM] - COLUMN OF THE GRID
+
+  ;LOCAL VARIABLES: N/A
+
+  push bp
+  mov bp, sp
+  push ax
+  push si
+
+  ;FUNCTION START
+  mov ax, 9
+  mul byte [bp + 8]
+  add word ax, [bp + 6]
+  mov si, ax
+  add si, [bp + 10]
+
+  mov ax, [bp + 4]
+  mov [si], al
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  pop si
+  pop ax
+  pop bp
+ret 8
+
+copy_grid:
+  ;FUNCTION NAME: COPY_GRID
+
+  ;PASSED PARAMETERS
+  ;[bp + 6] [1ST PARAM] - SOURCE GRID (POINTER)
+  ;[bp + 4] [2ND PARAM] - DESTINATION GRID (POINTER)
+
+  ;LOCAL VARIABLES: N/A
+
+  push bp
+  mov bp, sp
+  push ds
+  push si
+  push es
+  push di
+  push cx
+
+  ;FUCTION START
+  push ds
+  pop es
+  mov si, [bp + 6]
+  mov di, [bp + 4]
+  mov cx, 81
+  rep movsb
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  pop cx
+  pop di
+  pop es
+  pop si
+  pop ds
+  pop bp
+ret 4
 
 draw_line:
   ;FUNCTION NAME: DRAW_LINE
@@ -557,6 +863,11 @@ draw_ls:
 
   mov ah, 11111100b
   mov word [difficulty], hard
+  push hard_grid
+  push curr_grid
+  call copy_grid
+  mov word [current_grid_ptr], curr_grid
+  mov word [solution_grid_ptr], hard_grid_sol
   
   skip_lsf:
   push word [mode_text]
@@ -573,6 +884,11 @@ draw_ls:
 
   mov ah, 11111100b
   mov word [difficulty], easy
+  push easy_grid
+  push curr_grid
+  call copy_grid
+  mov word [current_grid_ptr], curr_grid
+  mov word [solution_grid_ptr], easy_grid_sol
   
   skip_esf:
   push word [mode_text]
@@ -589,6 +905,11 @@ draw_ls:
 
   mov ah, 11111100b
   mov word [difficulty], medium
+  push medium_grid
+  push curr_grid
+  call copy_grid
+  mov word [current_grid_ptr], curr_grid
+  mov word [solution_grid_ptr], medium_grid_sol
   
   skip_hf:
   push word [mode_text]
@@ -1065,7 +1386,25 @@ draw_gs:
   push word 0
   call draw_line
 
-  call draw_cursor
+  push word [current_grid_ptr]
+  call draw_grid
+
+  push 0
+  push word [current_grid_ptr]
+  push word [cursor_row]
+  push word [cursor_col]
+  call get_grid_value
+  pop ax
+  mov ah, 10010111b;
+  add al, '0'
+  cmp al, '0'
+  jne cell_occupied
+  mov al, '*'
+  cell_occupied:
+  push ax
+  push word [cursor_row]
+  push word [cursor_col]
+  call draw_inside_grid
   
   push word [bp - 12]
   push word [bp - 6] 
@@ -1350,11 +1689,12 @@ gs_kbisr:
   ;SAVING REGISTERS AND INITIALIZING LOCAL VARIABLES
   push bp
   mov bp, sp
-
   push ax
   push es
+  push dx
 
   ;FUNCTION START
+  xor dx, dx
   in al, 0x60
 
   cmp al, 0x11; W
@@ -1388,14 +1728,46 @@ nextcmp_2:
 
 nextcmp_3:
   cmp al, 0x20; D
-  jne nomatch
+  jne nextcmp_4
   cmp word [cursor_col], 8
   jge exit_gs_kbisr
   inc word [cursor_col]
   jmp draw_gs_kbisr
 
+nextcmp_4:
+  cmp al, 0x02; 1
+  jl nomatch
+  cmp al, 0x0A; 9
+  jg nomatch
+  dec al
+  push 0
+  push word [current_grid_ptr]
+  push word [cursor_row]
+  push word [cursor_col]
+  call get_grid_value
+  pop dx
+  cmp dx, 0
+  jne exit_gs_kbisr
+
+  push 0
+  push word [solution_grid_ptr]
+  push word [cursor_row]
+  push word [cursor_col]
+  call get_grid_value
+  pop dx
+  cmp dl, al
+  jne exit_gs_kbisr
+
+  push word [current_grid_ptr]
+  push word [cursor_row]
+  push word [cursor_col]
+  push ax
+  call set_grid_value
+  jmp draw_gs_kbisr
+  
 ;IF NO MATCH, EXIT
 nomatch:
+  pop dx
   pop es
   pop ax
   pop bp
@@ -1413,6 +1785,8 @@ draw_gs_kbisr:
 exit_gs_kbisr:
   mov al, 0x20
   out 0x20, al
+
+  pop dx
   pop es
   pop ax
   pop bp
@@ -1535,6 +1909,33 @@ hook_gs_kbisr:
   pop ax
 ret
 
+unhook_gs_kbisr:
+
+  ;FUNCTION NAME: UNHOOK_GS_KBISR (UNHOOK GAMESPACE KEYBOARD INTERRUPT SERVICE ROUTINE)
+  ;PASSED PARAMETERS: N/A
+  ;LOCAL VARIABLES: N/A
+
+  ;SAVING REGISTERS AND INITIALIZING LOCAL VARIABLES
+  push ax
+  push es
+
+  ;FUNCTION START
+  xor ax, ax
+  mov es, ax
+
+  cli 
+  mov ax, [oldkbisr]
+  mov word [es:9 * 4], ax
+  mov ax, [oldkbisr + 2]
+  mov [es:9 * 4 + 2], ax
+  sti 
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  pop es
+  pop ax
+ret
+
+
 start:
 
   mov ah, 00h
@@ -1601,10 +2002,15 @@ start:
       cmp ah, 0x1c
       jne ls_il
 
+
   call clear_timer
   call hook_timer_interrupt
   call hook_gs_kbisr
-
+  mov word [scroll_flag], 1
+  call reset_number_cards
+  call set_number_cards
+  call reset_cursor_position
+  
   call refresh_buffer
   push word 2
   call draw_gs
@@ -1616,6 +2022,7 @@ start:
     cmp ah, 0x01               
     jne skip_jumping_to_mm_game_loop   
 
+    call unhook_gs_kbisr
     call unhook_timer_interrupt
     jmp main_menu_ol
     
