@@ -14,7 +14,7 @@ medium:         db 'MEDIUM', 0
 hard:           db 'HARD', 0
 difficulty_s:   db 'DIFFICULTY: ', 0
 score_s:        db 'SCORE: ', 0
-mistakes_s:     db 'MISTAKES: ', 0
+mistakes_s:     db 'MISTAKES LFT: ', 0
 timer_s:        db 'TIMER: ', 0
 notes_s:        db 'NOTES: ', 0
 off_s           db 'OFF', 0
@@ -26,7 +26,8 @@ colon:          db ':', 0
 
 difficulty:     dw 0
 score:          dw 0
-mistakes:       dw 0
+score_multiplier: dw 1
+mistakes_left:  dw 0
 max_mistakes:   db '0'
 timer:          db '0:00', 0
 mode_text:      dw 0
@@ -38,12 +39,13 @@ curr_index:     dw 0
 gen_flag:       dw 0
 scroll_flag:    dw 1
 ncs_flag:       dw 0
+terminate_flag: dw 0
 
 main_theme:     equ 0111000000000000b
 
 tickcount:      dw 0
-seconds:        dw 0
-minutes:        dw 0
+seconds:        dw 59
+minutes:        dw 9
 zero:           dw 0
 
 oldisr:         dd 0
@@ -120,6 +122,192 @@ hard_grid_sol:  db 8,5,1,3,9,4,7,2,6
                 db 6,8,5,1,2,3,4,7,9
                 db 7,3,4,5,8,9,1,6,2
                 db 2,1,9,7,4,6,5,3,8
+
+check_row_completion:
+
+  ;FUNCTION NAME: CHECK_ROW_COMPLETION
+
+  ;PASSED PARAMETERS
+  ;[bp + 8] [1ST PARAM] - RETURN VALUE (0 - INCOMPLETE, 1 - COMPLETE)
+  ;[bp + 6] [2ND PARAM] - GRID TO CHECK (POINTER)
+  ;[bp + 4] [3RD PARAM] - ROW INDEX
+
+  ;LOCAL VARIABLES: N/A
+
+  push bp
+  mov bp, sp
+  push es
+  push di
+  push ax
+  push cx
+
+  ;FUNCTION START
+  push ds
+  pop es
+  
+  mov ax, 9
+  mul byte [bp + 4]
+  mov di, ax
+  add di, [bp + 6]
+
+  cld
+  xor ax, ax
+  mov cx, 10
+  repne scasb
+
+  cmp cx, 0
+  jg else_crc
+  mov word [bp + 8], 1
+  jmp end_crc
+  else_crc:
+  mov word [bp + 8], 0
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  end_crc:
+  pop cx
+  pop ax
+  pop di
+  pop es
+  pop bp
+ret 4
+
+check_column_completion:
+
+  ;FUNCTION NAME: CHECK_COLUMN_COMPLETION
+
+  ;PASSED PARAMETERS
+  ;[bp + 8] [1ST PARAM] - RETURN VALUE (0 - INCOMPLETE, 1 - COMPLETE)
+  ;[bp + 6] [2ND PARAM] - GRID TO CHECK (POINTER)
+  ;[bp + 4] [3RD PARAM] - COLUMN INDEX
+
+  ;LOCAL VARIABLES: N/A
+
+  push bp
+  mov bp, sp
+  push es
+  push di
+  push ax
+  push cx
+
+  ;FUNCTION START
+  push ds
+  pop es
+  
+  mov di, [bp + 4]
+  add di, [bp + 6]
+
+  xor ax, ax
+  mov cx, 10
+  num_check_ccc:
+    mov al, [es:di]
+    cmp al, 0
+    je exit_num_check_ccc
+    add di, 9 
+  loop num_check_ccc
+  
+  exit_num_check_ccc:
+  cmp cx, 0
+  jg else_ccc
+  mov word [bp + 8], 1
+  jmp end_ccc
+  else_ccc:
+  mov word [bp + 8], 0
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  end_ccc:
+  pop cx
+  pop ax
+  pop di
+  pop es
+  pop bp
+ret 4
+
+add_score:
+  ;FUNCTION NAME: ADD_SCORE
+
+  ;PASSED PARAMETERS:
+  ;[bp + 8] [1ST PARAM] - CURRENT GRID (POINTER)
+  ;[bp + 6] [2ND PARAM] - CURSOR ROW
+  ;[bp + 4] [3RD PARAM] - CURSOR COLUMN
+
+  ;LOCAL VARIABLES: N/A
+
+  push bp
+  mov bp, sp
+  push ax
+  push dx
+
+  ;FUNCTION START
+  mov ax, 100
+  
+  push 0
+  push word [bp + 8]
+  push word [bp + 6]
+  call check_row_completion
+  pop dx
+
+  cmp dx, 1
+  jne else_as
+  add ax, 100
+
+  else_as:
+  push 0
+  push word [bp + 8]
+  push word [bp + 4]
+  call check_column_completion
+  pop dx
+
+  cmp dx, 1
+  jne else_as_2
+  add ax, 100
+
+  else_as_2:
+  cmp word [minutes], 5
+  jb multiply_score
+  add ax, 50
+
+  multiply_score:
+  mov dx, [score_multiplier]
+  mul byte dl
+  add [score], ax
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  pop dx
+  pop ax
+  pop bp
+ret 6
+
+update_number_card:
+  ;FUNCTION NAME: UPDATE_NUMBER_CARD
+
+  ;PASSED PARAMETERS
+  ;[bp + 6] [1ST PARAM] - MODE (0 - DECREMENT, 1 - INCREMENT)
+  ;[bp + 4] [2ND PARAM] - NUMBER CARD INDEX
+
+  ;LOCAL VARIABLES: N/A
+
+  push bp
+  mov bp, sp
+  push si
+
+  ;FUNCTION START
+  mov si, [bp + 4]
+  sub si, 1
+  shl si, 1
+
+  cmp word [bp + 6], 0
+  jne else_unc
+  dec word [number_cards + si]
+  jmp exit_unc
+
+  else_unc:
+  inc word [number_cards + si]
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  exit_unc:
+  pop si
+  pop bp
+ret 4
 
 set_number_cards:
   ;FUNCTION NAME: SET_NUMBER_CARDS
@@ -547,15 +735,14 @@ print_text:
   mov si, [bp + 10]
   mov ax, [si]
   xor cx, cx
+  xor dx, dx
 
   stack_push_loop:
 
-    div byte [bp - 2]
-    mov dl, ah
-    xor dh, dh
+    div word [bp - 2]
     add dx, '0'
     push dx
-    xor ah, ah
+    xor dx, dx
     inc cx
     cmp ax, 0
   jne stack_push_loop
@@ -868,6 +1055,10 @@ draw_ls:
   call copy_grid
   mov word [current_grid_ptr], curr_grid
   mov word [solution_grid_ptr], hard_grid_sol
+  mov word [mistakes_left], 1
+  mov word [seconds], 0
+  mov word [minutes], 6
+  mov word [score_multiplier], 3
   
   skip_lsf:
   push word [mode_text]
@@ -889,7 +1080,11 @@ draw_ls:
   call copy_grid
   mov word [current_grid_ptr], curr_grid
   mov word [solution_grid_ptr], easy_grid_sol
-  
+  mov word [mistakes_left], 3
+  mov word [seconds], 59
+  mov word [minutes], 9
+  mov word [score_multiplier], 1
+
   skip_esf:
   push word [mode_text]
   push medium
@@ -910,6 +1105,10 @@ draw_ls:
   call copy_grid
   mov word [current_grid_ptr], curr_grid
   mov word [solution_grid_ptr], medium_grid_sol
+  mov word [mistakes_left], 2
+  mov word [seconds], 0
+  mov word [minutes], 8
+  mov word [score_multiplier], 2
   
   skip_hf:
   push word [mode_text]
@@ -1089,7 +1288,7 @@ draw_gs_te:
   add word [bp - 2], 1
 
   push word [mode_number]
-  push mistakes
+  push mistakes_left
   push word [bp + 8]
   mov dx, [bp + 6]
   add dx, [bp - 4]
@@ -1657,14 +1856,14 @@ timer_isr:
   cmp word [tickcount], 18
   jne skip_drawing_timer
 
-  inc word [seconds]
+  dec word [seconds]
   mov word [tickcount], 0
 
-  cmp word [seconds], 60
-  jne call_draw_timer
+  cmp word [seconds], 0
+  jg call_draw_timer
 
-  mov word [seconds], 0
-  inc word [minutes]
+  mov word [seconds], 59
+  dec word [minutes]
 
   call_draw_timer:
     cmp word [ncs_flag], 0
@@ -1694,6 +1893,7 @@ gs_kbisr:
   push dx
 
   ;FUNCTION START
+  xor ax, ax
   xor dx, dx
   in al, 0x60
 
@@ -1756,13 +1956,22 @@ nextcmp_4:
   call get_grid_value
   pop dx
   cmp dl, al
-  jne exit_gs_kbisr
+  jne penalize_incorrect_input
 
   push word [current_grid_ptr]
   push word [cursor_row]
   push word [cursor_col]
   push ax
   call set_grid_value
+
+  push word [current_grid_ptr]
+  push word [cursor_row]
+  push word [cursor_col]
+  call add_score
+
+  push 0
+  push ax
+  call update_number_card
   jmp draw_gs_kbisr
   
 ;IF NO MATCH, EXIT
@@ -1772,6 +1981,13 @@ nomatch:
   pop ax
   pop bp
   jmp far [cs:oldkbisr]
+
+penalize_incorrect_input:
+  dec word [mistakes_left]
+  cmp word [mistakes_left], 0
+  jg draw_gs_kbisr
+  mov word [terminate_flag], 1
+  jmp nomatch
 
 ;DRAW GAMESPACE
 draw_gs_kbisr:
@@ -2002,14 +2218,14 @@ start:
       cmp ah, 0x1c
       jne ls_il
 
-
-  call clear_timer
   call hook_timer_interrupt
   call hook_gs_kbisr
   mov word [scroll_flag], 1
   call reset_number_cards
   call set_number_cards
   call reset_cursor_position
+  mov word [terminate_flag], 0
+  mov word [score], 0
   
   call refresh_buffer
   push word 2
@@ -2053,10 +2269,11 @@ start:
      call draw_gs
 
     enter_key_check:
-     cmp ah, 0x1c
-  jne game_loop 
+    cmp word [terminate_flag], 1
+  jne game_loop
   
   call unhook_timer_interrupt
+  call unhook_gs_kbisr
   call refresh_buffer
   call draw_es
 
