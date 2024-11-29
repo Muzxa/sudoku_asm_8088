@@ -32,6 +32,7 @@ max_mistakes:   db '0'
 timer:          db '0:00', 0
 mode_text:      dw 0
 mode_number:    dw 1
+current_notes_setting: dw 0
 
 number_cards:   dw 1, 2, 3, 4, 5, 6, 7, 8, 9
 curr_index:     dw 0
@@ -40,8 +41,10 @@ gen_flag:       dw 0
 scroll_flag:    dw 1
 ncs_flag:       dw 0
 terminate_flag: dw 0
+notes_flag: dw 0
 
 main_theme:     equ 0111000000000000b
+notes_background: equ 0001000000000000b
 
 tickcount:      dw 0
 seconds:        dw 59
@@ -127,6 +130,255 @@ hard_grid_sol:  db 8,5,1,3,9,4,7,2,6
     
 undo_stack: times 243 db 0
 undo_stack_ptr: dw 242
+notes_array: times 81*9 db 0
+
+toggle_note:
+  ;FUNCTION NAME: TOGGLE NOTE
+
+  ;PASSED PARAMETERS
+  ;[bp + 8]  [2ND PARAM] - NOTE VALUE (1 - 9)
+  ;[bp + 6]  [3RD PARAM] - CURSOR ROW
+  ;[bp + 4]  [4TH PARAM] - CURSOR COLUMN
+
+  ;LOCAL VARIABLES: N/A
+  push bp
+  mov bp, sp
+  pusha
+
+  mov ax, 81
+  mul byte [bp + 6]
+  mov bx, ax
+  mov ax, 9
+  mul byte [bp + 4]
+  add bx, ax
+  add bx, [bp + 8]
+  dec bx
+  add bx, notes_array
+
+  xor cx, cx
+  mov cx, [bp + 8]
+  xor byte [bx], cl
+
+popa
+pop bp
+ret 6
+
+return_cursor_location_on_screen:
+  ;FUNCTION NAME: RETURN CURSOR LOCATION ON SCREEN
+
+  ;PASSED PARAMETERS
+  ;[bp + 8] [1ST PARAM] - RETURN VALUE
+  ;[bp + 6] [2ND PARAM] - CURSOR ROW
+  ;[bp + 4] [3RD PARAM] - CURSOR COLUMN
+
+  ;LOCAL VARIABLES
+  ;[bp - 2] - TEMP CURSOR ROW
+  ;[bp - 4] - TEMP CURSOR COLUMN
+
+  push bp
+  mov bp, sp
+  sub sp, 4
+  push ax
+  push bx
+  push cx
+  push dx
+
+  ;FUNCTION START
+  mov ax, [bp + 6]
+  mov [bp - 2], ax
+
+  cmp word [bp + 6], 6
+  jb else_rclos_3
+  sub word [bp - 2], 6
+
+  else_rclos_3:
+  mov ax, [bp + 4]
+  mov [bp - 4], ax
+
+  mov ax, 4
+  mul byte [bp - 2]
+  mov cx, ax
+
+  mov ax, 6
+  mul byte [bp - 4]
+  mov dx, ax
+
+  cmp word [bp - 4], 3
+  jl else_rclos_1
+  inc dx
+
+  else_rclos_1:
+  cmp word [bp - 4], 6
+  jl else_rclos_2
+  inc dx
+
+  else_rclos_2:
+  mov ax, 80
+  mov bl, 2
+  add bl, cl
+  mul byte bl
+  add ax, 4
+  add ax, dx
+  shl ax, 1
+  mov [bp + 8], ax
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  pop dx
+  pop cx
+  pop bx
+  pop ax
+  add sp, 4
+  pop bp
+ret 4
+
+print_notes_grid:
+  ;FUNCTION NAME: PRINT NOTES GRID
+
+  ;[bp + 8] [1ST PARAM] - BACKGROUND COLOR
+  ;[bp + 6] [2ND PARAM] - CURSOR ROW
+  ;[bp + 4] [3RD PARAM] - CURSOR COLUMN
+
+  ;LOCAL VARIABLES: N/A
+
+  push bp
+  mov bp, sp
+  pusha
+
+  ;FUNCTION START
+  ;-- SCREEN LOCATION CALCULATION FOR [DS:SI] -- 
+  mov ax, 81
+  mul byte [bp + 6]
+  mov si, ax
+  mov ax, 9
+  mul byte [bp + 4]
+  add si, ax
+  add si, notes_array
+
+;-- SCREEN LOCATION CALCULATION FOR [ES:DI] -- 
+  push ds
+  pop es
+
+  mov ax, [bp + 6]
+  cmp ax, 6
+  jb else_png_1
+  sub ax, 6
+  
+  else_png_1:
+  push 0
+  push word ax
+  push word [bp + 4]
+  call return_cursor_location_on_screen
+  pop di
+  add di, off_screen_buffer
+  sub di, 162
+
+  mov cx, 9
+  xor dx, dx
+
+  note_print_loop:
+    mov ax, [bp + 8]
+    mov al, [ds:si]
+    cmp al, 0
+    je skip_printing_npl
+    add al, '0'
+    mov [es:di], ax
+    skip_printing_npl:
+    inc si
+    add di, 2
+    inc dx
+    cmp dx, 3
+    jb stay_on_row
+    add di, 154
+    xor dx, dx
+    stay_on_row:
+  loop note_print_loop
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  popa
+  pop bp
+ret 6
+
+clear_notes:
+  ;FUNCTION NAME: CLEAR NOTES
+  ;PASSED PARAMETERS: N/A
+  ;LOCAL VARIABLES: N/A
+
+  push bp
+  mov bp, sp
+  push es
+  push di
+  push ax
+  push cx
+
+  ;FUNCTION START
+  push ds
+  pop es
+  xor di, di
+  add di, notes_array
+  xor ax, ax
+  mov cx, 729
+  rep stosb
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  pop cx
+  pop ax
+  pop di
+  pop es
+  pop bp
+ret
+
+change_notes_grid_bg:
+  ;FUNCTION NAME: CHANGE NOTES GRID BACKGROUND
+
+  ;PASSED PARAMETERS
+  ;[bp + 6] [1ST PARAM] - BACKGROUND COLOR
+  ;[bp + 6] [2ND PARAM] - CURSOR ROW
+  ;[bp + 4] [3RD PARAM] - CURSOR COLUMN
+
+  ;LOCAL VARIABLES: N/A
+
+  push bp
+  mov bp, sp
+  pusha
+
+  ;FUNCTION START
+  ;SETTING ES TO VIDEO MEMORY
+  push ds
+  pop es
+  mov ax, [bp + 8]
+  mov al, 0
+
+  ;GETTING CURSOR LOCATION AND POPPING IT TO DI
+  push 0
+  push word [bp + 6]
+  push word [bp + 4]
+  call return_cursor_location_on_screen
+  pop di
+  add di, off_screen_buffer
+
+  sub di, 161
+  mov [es:di], ah
+  add di, 2
+  mov [es:di], ah
+  add di, 2
+  mov [es:di], ah
+  add di, 156
+  mov [es:di], ah
+  add di, 2
+  mov [es:di], ah
+  add di, 2
+  mov [es:di], ah
+  add di, 156
+  mov [es:di], ah
+  add di, 2
+  mov [es:di], ah
+  add di, 2
+  mov [es:di], ah
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  popa
+  pop bp
+ret 6
 
 grow_undo_stack:
   ;FUNCTION NAME: GROW_UNDO_STACK
@@ -233,7 +485,6 @@ undo:
 ret 2
 
 check_row_completion:
-
   ;FUNCTION NAME: CHECK_ROW_COMPLETION
 
   ;PASSED PARAMETERS
@@ -609,7 +860,7 @@ draw_grid:
   upper_half_ol:
     
     cmp byte [si], 0
-    je skip_printing_uh
+    je print_notes_uh
 
     mov al, [si]
     add al, '0'
@@ -618,6 +869,13 @@ draw_grid:
     push cx
     push dx
     call draw_inside_grid
+    jmp skip_printing_uh
+
+    print_notes_uh:
+    push main_theme
+    push cx
+    push dx
+    call print_notes_grid
 
     skip_printing_uh:
     inc si
@@ -637,7 +895,7 @@ draw_grid:
 
     lower_half_ol:
       cmp byte [si], 0
-      je skip_printing_lh
+      je print_notes_lh
 
       mov al, [si]
       add al, '0'
@@ -646,7 +904,14 @@ draw_grid:
       push cx
       push dx
       call draw_inside_grid
+      jmp skip_printing_lh
 
+      print_notes_lh:
+      push main_theme
+      push cx
+      push dx
+      call print_notes_grid
+  
       skip_printing_lh:
       inc si
       inc dx
@@ -1157,12 +1422,12 @@ draw_ls:
 
   cmp word [gen_flag], 0
   jne skip_lsf
-
   mov ah, 11111100b
   mov word [difficulty], hard
   push hard_grid
   push curr_grid
   call copy_grid
+  
   mov word [current_grid_ptr], curr_grid
   mov word [solution_grid_ptr], hard_grid_sol
   mov word [mistakes_left], 1
@@ -1420,13 +1685,22 @@ draw_gs_te:
   add word [bp - 2], 1
 
   push word [mode_text]
-  push off_s
+  push word [current_notes_setting]
   push word [bp + 8]
   mov dx, [bp + 6]
   add dx, [bp - 4]
   push dx
   push word [bp - 2]
   call print_text
+
+  add word [bp - 2], 2
+
+  push 2
+  push 19
+  push 0000000000000000b
+  push word [bp + 6]
+  push word [bp - 2]
+  call draw_line
 
   ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   pop dx
@@ -1698,6 +1972,9 @@ draw_gs:
   push word [current_grid_ptr]
   call draw_grid
 
+  cmp word [notes_flag], 1
+  je skip_drawing_cursor
+
   push 0
   push word [current_grid_ptr]
   push word [cursor_row]
@@ -1714,6 +1991,8 @@ draw_gs:
   push word [cursor_row]
   push word [cursor_col]
   call draw_inside_grid
+
+  skip_drawing_cursor:
   
   push word [bp - 12]
   push word [bp - 6] 
@@ -1723,13 +2002,18 @@ draw_gs:
   jne skip_gs_te_call
 
   call draw_gs_te
-  jmp move_gs_to_screen
+  jmp notes_decision
 
   skip_gs_te_call:
-    call draw_ncs
+  call draw_ncs
 
+  notes_decision:
+  cmp word [notes_flag], 0
+  je move_gs_to_screen
+  call draw_note_elements
+  
   move_gs_to_screen:
-    call move_buffer_to_screen
+  call move_buffer_to_screen
 
   ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   pop dx
@@ -1738,6 +2022,18 @@ draw_gs:
   add sp, 18
   pop bp
 ret 2
+
+draw_note_elements:
+  push bp
+  mov bp, sp
+
+  push notes_background
+  push word [cursor_row]
+  push word [cursor_col]
+  call change_notes_grid_bg
+
+  pop bp
+ret
 
 refresh_side_screen:
   ;NAME: REFRESH_SIDE_SCREEN (REFRESH SIDE SCREEN)
@@ -2049,10 +2345,35 @@ nextcmp_4:
   jne nextcmp_5
   push word [current_grid_ptr]
   call undo
- 
   jmp draw_gs_kbisr
 
 nextcmp_5:
+  cmp al, 49; N
+  jne nextcmp_6
+
+  push 0
+  push word [current_grid_ptr]
+  push word [cursor_row]
+  push word [cursor_col]
+  call get_grid_value
+  pop dx
+  cmp dx, 0
+  jne exit_gs_kbisr
+
+  push es
+  push 0
+  pop es
+  cli
+  mov word [es:9 * 4], notes_kbisr
+  mov [es:9 * 4 + 2], cs
+  sti
+  pop es
+
+  mov word [current_notes_setting], on_s
+  mov word [notes_flag], 1
+  jmp draw_gs_kbisr
+
+nextcmp_6:
   cmp al, 0x02; 1
   jl nomatch
   cmp al, 0x0A; 9
@@ -2130,6 +2451,77 @@ draw_gs_kbisr:
 
 ;EXIT
 exit_gs_kbisr:
+  mov al, 0x20
+  out 0x20, al
+
+  pop dx
+  pop es
+  pop ax
+  pop bp
+iret
+
+notes_kbisr:
+  ;FUNCTION NAME: NOTES_KBISR (GAMESPACE KEYBOARD INTERRUPT SERVICE ROUTINE)
+  ;PASSED PARAMETERS: N/A
+  ;LOCAL VARIABLES: N/A
+
+  ;SAVING REGISTERS AND INITIALIZING LOCAL VARIABLES
+  push bp
+  mov bp, sp
+  push ax
+  push es
+  push dx
+
+  ;FUNCTION START
+  xor ax, ax
+  xor dx, dx
+  in al, 0x60
+
+  cmp al, 49
+  jne nextcmp_notes_kbisr
+  push es
+  push 0
+  pop es
+  cli
+  mov word [es:9 * 4], gs_kbisr
+  mov [es:9 * 4 + 2], cs
+  sti
+  pop es
+  mov word [current_notes_setting], off_s
+  mov word [notes_flag], 0
+  jmp draw_gs_notes_isr
+
+  nextcmp_notes_kbisr:
+  cmp al, 0x02; 1
+  jl nomatch_notes_kbisr
+  cmp al, 0x0A; 9
+  jg nomatch_notes_kbisr
+  dec ax
+
+  push ax
+  push word [cursor_row]
+  push word [cursor_col]
+  call toggle_note
+
+  jmp draw_gs_notes_isr
+  
+;IF NO MATCH, EXIT
+nomatch_notes_kbisr:
+  pop dx
+  pop es
+  pop ax
+  pop bp
+  jmp far [cs:oldkbisr]
+
+draw_gs_notes_isr:
+call refresh_buffer
+inc word [scroll_flag]
+push word [scroll_flag]
+dec word [scroll_flag]
+call draw_gs
+
+;EXIT
+exit_notes_kbisr:
   mov al, 0x20
   out 0x20, al
 
@@ -2282,7 +2674,6 @@ unhook_gs_kbisr:
   pop ax
 ret
 
-
 start:
 
   mov ah, 00h
@@ -2344,6 +2735,7 @@ start:
 
     skip_ls_il:
       call draw_ls
+    skip_drawing_ls:
       cmp ah, 0x01
       je  main_menu_ol
       cmp ah, 0x1c
@@ -2357,6 +2749,8 @@ start:
   call reset_cursor_position
   mov word [terminate_flag], 0
   mov word [score], 0
+  mov word [current_notes_setting], off_s
+  call clear_notes
 
   call refresh_buffer
   push word 2
