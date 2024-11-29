@@ -20,9 +20,10 @@ notes_s:        db 'NOTES: ', 0
 off_s           db 'OFF', 0
 on_s            db 'ON', 0
 game_over_s:    db 'GAME OVER', 0
-time_elapsed_s: db 'TIME ELAPSED:  0:00', 0
+time_elapsed_s: db 'TIME REMAINING: ', 0
 number_cards_s: db 'NUMBER CARDS', 0
 colon:          db ':', 0
+pipe:           db '|', 0
 
 difficulty:     dw 0
 score:          dw 0
@@ -44,7 +45,7 @@ terminate_flag: dw 0
 notes_flag: dw 0
 
 main_theme:     equ 0111000000000000b
-notes_background: equ 0001000000000000b
+notes_background: equ 0001011100000000b
 
 tickcount:      dw 0
 seconds:        dw 59
@@ -131,6 +132,74 @@ hard_grid_sol:  db 8,5,1,3,9,4,7,2,6
 undo_stack: times 243 db 0
 undo_stack_ptr: dw 242
 notes_array: times 81*9 db 0
+
+bird_row: dw 17
+bird_col: dw 63
+movement_mode: dw 0
+bird: db "<//>"
+
+update_bird_pos:
+
+  cmp word [bird_row], 24
+  jb else_ubp_3
+  mov word [movement_mode],0
+  mov word [bird_row], 17
+  mov word [bird_col], 63
+  jmp exit_ubp
+
+  else_ubp_3:
+  cmp word [bird_col], 75
+  jb else_ubp_2
+  inc word [bird_row]
+  mov word [movement_mode], 1
+
+  else_ubp_2:
+  cmp word [bird_col], 63
+  ja update_pos
+  inc word [bird_row]
+  mov word [movement_mode], 0
+
+  update_pos:
+  cmp word [movement_mode], 0
+  jne else_ubp_1
+  add word [bird_col], 2
+  jmp exit_ubp
+
+  else_ubp_1:
+  sub word [bird_col], 2
+exit_ubp:
+ret
+
+draw_bird:
+  push bp
+  mov bp, sp
+  pusha
+
+  push ds
+  pop es
+  
+  mov ax, 80
+  mul byte [bird_row]
+  add word ax, [bird_col]
+  shl ax, 1
+  mov di, ax
+  add di, off_screen_buffer
+
+  mov si, bird
+  mov cx, 4
+
+  draw_bird_loop:
+    xor ax, ax
+    mov ax, main_theme
+    mov al, [si]
+    mov [es:di], ax
+    inc si
+    add di, 2
+  loop draw_bird_loop
+
+  popa
+  pop bp
+ret
 
 toggle_note:
   ;FUNCTION NAME: TOGGLE NOTE
@@ -1527,7 +1596,7 @@ draw_es:
   push es
   
   mov word [bp - 2], 37
-  mov word [bp - 4], 11
+  mov word [bp - 4], 10
   mov word [bp - 6], main_theme
   mov word [bp - 8], 1111110000000000b
   
@@ -1544,6 +1613,52 @@ draw_es:
 
   push word [mode_text]
   push word time_elapsed_s
+  push word [bp - 6]
+  push word [bp - 2]
+  push word [bp - 4]
+  call print_text
+
+  add word [bp - 2], 16
+
+  push word 1
+  push word minutes
+  push word [bp - 6]
+  push word [bp - 2]
+  push word [bp - 4]
+  call print_text
+
+  add word [bp - 2], 1
+
+  push word 0
+  push word colon
+  push word [bp - 6]
+  push word [bp - 2]
+  push word [bp - 4]
+  call print_text
+
+  add word [bp - 2], 1
+
+  push word 1
+  push word seconds
+  push word [bp - 6]
+  push word [bp - 2]
+  push word [bp - 4]
+  call print_text
+
+  add word [bp - 4], 1
+  sub word [bp - 2], 13
+
+  push word 0
+  push word score_s
+  push word [bp - 6]
+  push word [bp - 2]
+  push word [bp - 4]
+  call print_text
+
+  add word [bp - 2], 7
+
+  push word 1
+  push word score
   push word [bp - 6]
   push word [bp - 2]
   push word [bp - 4]
@@ -1702,6 +1817,8 @@ draw_gs_te:
   push word [bp - 2]
   call draw_line
 
+  call draw_bird
+
   ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   pop dx
   pop cx
@@ -1739,8 +1856,8 @@ draw_ncs:
   push cx
   push dx
 
-  mov word [bp - 2], 1
-  mov word [bp - 4], 5
+  mov word [bp - 2], 3
+  mov word [bp - 4], 7
   
   ;FUNCTION START
 
@@ -1759,10 +1876,10 @@ draw_ncs:
     push word [bp - 2]
     call print_text
 
-    inc ax
+    add ax, 2
 
     push 0
-    push word colon
+    push word pipe
     push main_theme
     push ax
     push word [bp - 2]
@@ -2261,6 +2378,8 @@ timer_isr:
   inc word [tickcount]
   cmp word [tickcount], 18
   jne skip_drawing_timer
+
+  call update_bird_pos
 
   dec word [seconds]
   mov word [tickcount], 0
