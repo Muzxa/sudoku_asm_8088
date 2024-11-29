@@ -47,6 +47,7 @@ tickcount:      dw 0
 seconds:        dw 59
 minutes:        dw 9
 zero:           dw 0
+temp_value:     dw 0
 
 oldisr:         dd 0
 oldkbisr:       dd 0
@@ -122,6 +123,114 @@ hard_grid_sol:  db 8,5,1,3,9,4,7,2,6
                 db 6,8,5,1,2,3,4,7,9
                 db 7,3,4,5,8,9,1,6,2
                 db 2,1,9,7,4,6,5,3,8
+
+    
+undo_stack: times 243 db 0
+undo_stack_ptr: dw 242
+
+grow_undo_stack:
+  ;FUNCTION NAME: GROW_UNDO_STACK
+
+  ;PASSED PARAMETERS
+  ;[bp + 10][1ST PARAM] - SCORE
+  ;[bp + 8] [2ND PARAM] - GRID VALUE
+  ;[bp + 6] [3RD PARAM] - GRID ROW
+  ;[bp + 4] [4TH PARAM] - GRID COLUMN
+
+  ;LOCAL VARIABLES: N/A
+
+  push bp
+  mov bp, sp
+  push ax
+  push bx
+
+  ;FUNCTION START
+  mov bx, [undo_stack_ptr]
+
+  xor ax, ax
+  mov ax, [bp + 10]
+  mov [undo_stack + bx], al
+  dec bx
+
+  xor ax, ax
+  mov ax, [bp + 8]
+  mov [undo_stack + bx], al
+  dec bx
+
+  xor ax, ax
+  mov ax, [bp + 6]
+  mov [undo_stack + bx], al
+  dec bx
+
+  xor ax, ax
+  mov ax, [bp + 4]
+  mov [undo_stack + bx], al
+  dec bx
+
+  mov [undo_stack_ptr], bx
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  pop bx
+  pop ax
+  pop bp
+ret 8
+
+undo:
+  ;FUNCTION NAME: UNDO
+
+  ;PASSED PARAMETERS
+  ;[bp + 4] [1ST PARAM] - TARGET GRID (POINTER)
+
+  ;LOCAL VARIABLES: N/A
+
+  push bp
+  mov bp, sp
+  push ax
+  push bx
+  push cx
+  push dx
+  push di
+
+  ;FUNCTION START
+  cmp word [undo_stack_ptr], 242
+  jge end_undo
+
+  mov bx, [undo_stack_ptr]
+
+  xor ax, ax
+  inc bx
+  mov al, [undo_stack + bx]
+
+  xor cx, cx
+  inc bx
+  mov cl, [undo_stack + bx]
+
+  xor dx, dx
+  inc bx
+  mov dl, [undo_stack + bx]
+
+  push word [bp + 4]
+  push cx
+  push ax
+  push dx
+  call set_grid_value
+
+  xor ax, ax
+  inc bx
+  mov al, [undo_stack + bx]
+  sub [score], ax
+
+  mov [undo_stack_ptr], bx
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  end_undo:
+  pop di
+  pop dx
+  pop cx
+  pop bx
+  pop ax
+  pop bp
+ret 2
 
 check_row_completion:
 
@@ -238,7 +347,7 @@ add_score:
   push dx
 
   ;FUNCTION START
-  mov ax, 100
+  mov ax, 10
   
   push 0
   push word [bp + 8]
@@ -248,7 +357,7 @@ add_score:
 
   cmp dx, 1
   jne else_as
-  add ax, 100
+  add ax, 10
 
   else_as:
   push 0
@@ -259,17 +368,18 @@ add_score:
 
   cmp dx, 1
   jne else_as_2
-  add ax, 100
+  add ax, 10
 
   else_as_2:
   cmp word [minutes], 5
   jb multiply_score
-  add ax, 50
+  add ax, 5
 
   multiply_score:
   mov dx, [score_multiplier]
   mul byte dl
   add [score], ax
+  mov [temp_value], ax
 
   ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   pop dx
@@ -589,10 +699,10 @@ set_grid_value:
   ;FUNCTION NAME: SET_GRID_VALUE
 
   ;PASSED PARAMETERS
-  ;[bp + 10] [1ST PARAM] - VALUE TO SET
-  ;[bp + 8]  [2ND PARAM] - GRID TO WRITE (POINTER)
-  ;[bp + 6]  [3RD PARAM] - ROW OF THE GRID
-  ;[bp + 4]  [4TH PARAM] - COLUMN OF THE GRID
+  ;[bp + 10]  [1ST PARAM] - GRID TO WRITE (POINTER)
+  ;[bp + 8]  [2ND PARAM] - ROW OF THE GRID
+  ;[bp + 6]  [3RD PARAM] - COLUMN OF THE GRID
+  ;[bp + 4] [4TH PARAM] - VALUE TO SET
 
   ;LOCAL VARIABLES: N/A
 
@@ -1935,6 +2045,14 @@ nextcmp_3:
   jmp draw_gs_kbisr
 
 nextcmp_4:
+  cmp al, 22; U
+  jne nextcmp_5
+  push word [current_grid_ptr]
+  call undo
+ 
+  jmp draw_gs_kbisr
+
+nextcmp_5:
   cmp al, 0x02; 1
   jl nomatch
   cmp al, 0x0A; 9
@@ -1961,13 +2079,26 @@ nextcmp_4:
   push word [current_grid_ptr]
   push word [cursor_row]
   push word [cursor_col]
-  push ax
-  call set_grid_value
+  call add_score
+
+  push 0
+  push word [current_grid_ptr]
+  push word [cursor_row]
+  push word [cursor_col]
+  call get_grid_value
+  pop dx
+
+  push word [temp_value] ;SCORE ADDED FOR THE INPUT
+  push dx
+  push word [cursor_row]
+  push word [cursor_col]
+  call grow_undo_stack
 
   push word [current_grid_ptr]
   push word [cursor_row]
   push word [cursor_col]
-  call add_score
+  push ax
+  call set_grid_value
 
   push 0
   push ax
@@ -2226,7 +2357,7 @@ start:
   call reset_cursor_position
   mov word [terminate_flag], 0
   mov word [score], 0
-  
+
   call refresh_buffer
   push word 2
   call draw_gs
