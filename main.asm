@@ -129,14 +129,118 @@ hard_grid_sol:  db 8,5,1,3,9,4,7,2,6
                 db 2,1,9,7,4,6,5,3,8
 
     
-undo_stack: times 243 db 0
+undo_stack: times 81*4 db 0
 undo_stack_ptr: dw 242
+
 notes_array: times 81*9 db 0
 
 bird_row: dw 17
 bird_col: dw 63
 movement_mode: dw 0
 bird: db "<//>"
+
+track: dw 3000, 4000, 5000, 4000, 3000 ; THIS IS THE TRACK FREQUENCY ARRAY
+track_d: dw 5, 6, 7, 6, 5              ; THIS IS THE TRACK DELAY ARRAY
+track_s: dw 5                          ; THIS IS THE TRACK SIZE
+
+correct_input_track: dw 4000, 2000
+correct_input_track_d: dw 4, 4
+correct_input_track_s: dw 2
+
+incorrect_input_track: dw 9000, 7000
+incorrect_input_track_d: dw 4, 4
+incorrect_input_track_s: dw 2
+
+DELAY:  ;delay of 1/18.2 seconds
+        push bp
+        mov bp, sp
+        push cx
+        push ax
+
+        DF_l1:                             
+            cmp word[bp+4], 0
+            je DF_end
+            mov ax, 0x0001
+            DF_l2:
+            mov cx, 0xFFFF
+                DS_l3: loop DS_l3     
+            dec ax
+            jnz DF_l2
+            dec word[bp+4]
+            jmp DF_l1
+        DF_end:
+        pop ax
+        pop cx
+        pop bp
+        ret 2
+sound:
+        ;load the counter 2 value for d3
+        ;push bx
+
+        PUSH BP
+        MOV BP, SP
+        PUSHA
+
+        mov ax, [bp + 6]
+        out 42h, al
+        mov al, ah
+        out 42h, al
+        
+        ;turn the speaker on
+        in al, 61h
+        mov ah ,al
+        or al, 3h
+        out 61h, al
+        mov bx, 5
+
+        mov bx,[bp+4]
+        push bx
+        call DELAY
+        
+        mov al, ah
+        out 61h, al
+
+        POPA
+        POP BP
+ret 4
+
+play_track:
+  ;FUNCTION NAME: PLAY TRACK
+
+  ;PASSED PARAMETERS
+  ;[bp + 8] [1SR PARAM] - POINTER TO TRACK FREQUENCY ARRAY
+  ;[bp + 6] [2ND PARAM] - POINTER TO TRACK DELAY ARRAY
+  ;[bp + 4] [3RD PARAM] - TRACK ARRAY SIZE
+
+  ;LOCAL VARIABLES: N/A
+
+  push bp
+  mov bp, sp
+  push ax
+  push cx
+  push si
+  push di
+
+  ;FUNCTION START
+  mov word cx, [bp + 4]
+  mov si, [bp + 6]
+  mov di, [bp + 8]
+
+  track_loop:
+    push word [di]
+    push word [si]
+    call sound
+    add si, 2
+    add di, 2
+  loop track_loop
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  pop di
+  pop si
+  pop cx
+  pop ax
+  pop bp
+ret 6
 
 update_bird_pos:
 
@@ -167,7 +271,7 @@ update_bird_pos:
 
   else_ubp_1:
   sub word [bird_col], 2
-exit_ubp:
+  exit_ubp:
 ret
 
 draw_bird:
@@ -511,6 +615,7 @@ undo:
   push cx
   push dx
   push di
+  push si
 
   ;FUNCTION START
   cmp word [undo_stack_ptr], 242
@@ -530,6 +635,17 @@ undo:
   inc bx
   mov dl, [undo_stack + bx]
 
+  push 0
+  push word [current_grid_ptr]
+  push cx
+  push ax
+  call get_grid_value
+  pop si
+
+  push 1
+  push si
+  call update_number_card
+
   push word [bp + 4]
   push cx
   push ax
@@ -545,6 +661,7 @@ undo:
 
   ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   end_undo:
+  pop si
   pop di
   pop dx
   pop cx
@@ -1279,25 +1396,6 @@ move_buffer_to_screen:
   pop si
   pop ds
 ret
-
-sleep: 
-  ;FUNCTION NAME: SLEEP (DELAY FUNCTION)
-
-  ;PASSED PARAMETERS
-  ;[bp + 4][1ST PARAM] - NUMBER OF LOOPS (DELAY)
-
-  ;LOCAL VARIABLES
-  ;N/A
-
-  push bp
-  mov  bp, sp
-
-  push   cx
-  mov    cx, [bp + 4]
-  delay: loop delay
-  pop    cx
-  pop    bp
-ret 2
 
 draw_bg_to_buffer: 
   ;FUNCTION NAME: DRAW_BG_TO_BUFFER (DRAW BACKGROUND TO BUFFER)
@@ -2222,28 +2320,6 @@ clear_screen:
   pop bp
 ret
 
-refresh_screen:
-  ;FUNCTION NAME: REFRESH_SCREEN (REFRESH SCREEN)
-
-  ;PASSED PARAMETERS
-  ;N/A
-
-  ;LOCAL VARIABLES
-  ;N/A
-
-  ;PARAMETERS FOR MOVE_BUFFER_TO_SCREEN FUNCTION
-  push bp
-  mov bp, sp
-
-  ;FUNCTION START
-  push 0111111100000000b
-  push 01h
-  call draw_bg
-  
-  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
-  pop bp
-ret
-
 refresh_buffer:
   ;FUNCTION NAME: REFRESH_BUFFER (REFRESH BUFFER)
 
@@ -2543,22 +2619,33 @@ nextcmp_6:
   push 0
   push ax
   call update_number_card
+
+  push correct_input_track
+  push correct_input_track_d
+  push word [correct_input_track_s]
+  call play_track
   jmp draw_gs_kbisr
-  
-;IF NO MATCH, EXIT
+
+penalize_incorrect_input:
+  dec word [mistakes_left]
+  cmp word [mistakes_left], 1
+  jge play_mistake_sound
+  mov word [terminate_flag], 1
+  jmp nomatch
+
+play_mistake_sound:
+  push incorrect_input_track
+  push incorrect_input_track_d
+  push word [incorrect_input_track_s]
+  call play_track
+  jmp draw_gs_kbisr
+
 nomatch:
   pop dx
   pop es
   pop ax
   pop bp
   jmp far [cs:oldkbisr]
-
-penalize_incorrect_input:
-  dec word [mistakes_left]
-  cmp word [mistakes_left], 0
-  jg draw_gs_kbisr
-  mov word [terminate_flag], 1
-  jmp nomatch
 
 ;DRAW GAMESPACE
 draw_gs_kbisr:
@@ -2670,8 +2757,8 @@ hook_timer_interrupt:
 
   mov ax, 3508h      
   int 21h
-  mov word [oldisr], bx  
-  mov word [oldisr+2], es 
+  mov word [cs:oldisr], bx  
+  mov word [cs:oldisr+2], es 
 
   xor  ax, ax
   mov  es, ax
@@ -2706,11 +2793,14 @@ unhook_timer_interrupt:
   push ax
   push dx
 
+  xor ax, ax
+  mov es, ax
+
   cli
   push ds
   mov ax, 2508h     
-  mov dx, [oldisr]   
-  mov ds, [oldisr+2]
+  mov dx, [cs:oldisr]   
+  mov ds, [cs:oldisr+2]
   int 21h
   pop ds
   sti
@@ -2920,6 +3010,11 @@ start:
   call unhook_gs_kbisr
   call refresh_buffer
   call draw_es
+
+  push track
+  push track_d
+  push word [track_s]
+  call play_track
 
   es_il:
     xor ah, ah
