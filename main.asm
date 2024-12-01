@@ -2,154 +2,162 @@
 
 jmp start
 
-off_screen_buffer: times 2000 dw 0
-overflow_buffer: times 20 dw 0
+off_screen_buffer:        times 2000 dw 0
+overflow_buffer:          times 20 dw 0
 
-sudoku:         db 'SUDOKU', 0
-play_game:      db 'PLAY  GAME', 0
-exit_s:         db 'EXIT', 0
-level_select:   db 'LEVEL SELECT', 0
-easy:           db 'EASY', 0
-medium:         db 'MEDIUM', 0
-hard:           db 'HARD', 0
-difficulty_s:   db 'DIFFICULTY: ', 0
-score_s:        db 'SCORE: ', 0
-mistakes_s:     db 'MISTAKES LFT: ', 0
-timer_s:        db 'TIMER: ', 0
-notes_s:        db 'NOTES: ', 0
-off_s           db 'OFF', 0
-on_s            db 'ON', 0
-game_over_s:    db 'GAME OVER', 0
-time_elapsed_s: db 'TIME REMAINING: ', 0
-number_cards_s: db 'NUMBER CARDS', 0
-colon:          db ':', 0
-pipe:           db '|', 0
+sudoku:                   db 'SUDOKU', 0
+play_game:                db 'PLAY  GAME', 0
+exit_s:                   db 'EXIT', 0
+level_select:             db 'LEVEL SELECT', 0
+easy:                     db 'EASY', 0
+medium:                   db 'MEDIUM', 0
+hard:                     db 'HARD', 0
+difficulty_s:             db 'DIFFICULTY: ', 0
+score_s:                  db 'SCORE: ', 0
+mistakes_s:               db 'MISTAKES LFT: ', 0
+timer_s:                  db 'TIMER: ', 0
+notes_s:                  db 'NOTES: ', 0
+off_s                     db 'OFF', 0
+on_s                      db 'ON', 0
+game_over_s:              db 'GAME OVER', 0
+time_elapsed_s:           db 'TIME REMAINING: ', 0
+number_cards_s:           db 'NUMBER CARDS', 0
+colon:                    db ':', 0
+pipe:                     db '|', 0
 
-difficulty:     dw 0
-score:          dw 0
-score_multiplier: dw 1
-mistakes_left:  dw 0
-max_mistakes:   db '0'
-timer:          db '0:00', 0
-mode_text:      dw 0
-mode_number:    dw 1
-current_notes_setting: dw 0
+difficulty:               dw 0
+score:                    dw 0
+score_multiplier:         dw 1
+mistakes_left:            dw 0
+current_notes_setting:    dw 0
 
-number_cards:   dw 1, 2, 3, 4, 5, 6, 7, 8, 9
-curr_index:     dw 0
+number_cards:             dw 0, 0, 0, 0, 0, 0, 0, 0, 0
+curr_index:               dw 0
 
-gen_flag:       dw 0
-scroll_flag:    dw 1
-ncs_flag:       dw 0
-terminate_flag: dw 0
-notes_flag: dw 0
+;FLAGS
+gen_flag:                 dw 0
+scroll_flag:              dw 1
+ncs_flag:                 dw 0
+terminate_flag:           dw 0
+notes_flag:               dw 0
 
-main_theme:     equ 0111000000000000b
-notes_background: equ 0001011100000000b
+main_theme:               equ 0111000000000000b
+notes_background:         equ 0001011100000000b
 
-tickcount:      dw 0
-seconds:        dw 59
-minutes:        dw 9
-zero:           dw 0
-temp_value:     dw 0
+tickcount:                dw 0
+seconds:                  dw 59
+minutes:                  dw 9
+zero:                     dw 0
+temp_value:               dw 0
 
-oldisr:         dd 0
-oldkbisr:       dd 0
+oldisr:                   dd 0
+oldkbisr:                 dd 0
 
-cursor_row:     dw 0
-cursor_col:     dw 0
+cursor_row:               dw 0
+cursor_col:               dw 0
 
-right:         equ 1
-left:          equ 2
-up:            equ 3
-down:          equ 4
-current_grid_ptr: dw 0
-solution_grid_ptr: dw 0
+right:                    equ 1
+left:                     equ 2
+up:                       equ 3
+down:                     equ 4
+mode_text:                equ 0
+mode_number:              equ 1
 
-easy_grid:      db 0,3,2,0,0,0,0,5,7
-                db 7,4,5,0,1,8,0,0,6
-                db 1,0,0,7,0,3,2,8,0
-                db 3,0,8,0,0,0,4,0,5
-                db 4,0,9,1,0,0,0,0,0
-                db 0,6,1,0,0,4,9,0,0
-                db 2,5,7,6,0,0,0,0,1
-                db 9,8,0,0,3,0,6,0,0
-                db 0,1,0,8,0,0,0,0,9
+current_grid_ptr:         dw 0
+solution_grid_ptr:        dw 0
 
-medium_grid:    db 4,0,0,0,6,0,9,0,0
-                db 0,0,0,0,4,3,6,8,0
-                db 0,8,0,7,0,1,2,0,4
-                db 0,0,0,0,8,0,4,0,0
-                db 0,9,0,0,0,7,1,6,0
-                db 7,6,0,0,1,0,0,3,0
-                db 0,0,1,0,0,9,0,0,0
-                db 3,0,9,0,0,0,0,0,0
-                db 0,5,6,0,0,0,8,0,1
+;GRIDS
+easy_grid:                db 0,3,2,0,0,0,0,5,7
+                          db 7,4,5,0,1,8,0,0,6
+                          db 1,0,0,7,0,3,2,8,0
+                          db 3,0,8,0,0,0,4,0,5
+                          db 4,0,9,1,0,0,0,0,0
+                          db 0,6,1,0,0,4,9,0,0
+                          db 2,5,7,6,0,0,0,0,1
+                          db 9,8,0,0,3,0,6,0,0
+                          db 0,1,0,8,0,0,0,0,9
 
-hard_grid:      db 0,5,1,0,9,0,0,2,6
-                db 9,0,0,8,1,7,0,0,0
-                db 4,0,0,0,0,0,0,0,1
-                db 0,6,0,4,0,2,0,1,0
-                db 3,0,0,0,0,1,0,0,0
-                db 0,0,7,0,3,8,2,0,4
-                db 0,0,0,0,0,0,4,7,0
-                db 0,3,0,5,0,0,1,0,0
-                db 0,0,0,7,0,0,5,3,0
+medium_grid:              db 4,0,0,0,6,0,9,0,0
+                          db 0,0,0,0,4,3,6,8,0
+                          db 0,8,0,7,0,1,2,0,4
+                          db 0,0,0,0,8,0,4,0,0
+                          db 0,9,0,0,0,7,1,6,0
+                          db 7,6,0,0,1,0,0,3,0
+                          db 0,0,1,0,0,9,0,0,0
+                          db 3,0,9,0,0,0,0,0,0
+                          db 0,5,6,0,0,0,8,0,1
 
-curr_grid:      times 81 db 0
+hard_grid:                db 0,5,1,0,9,0,0,2,6
+                          db 9,0,0,8,1,7,0,0,0
+                          db 4,0,0,0,0,0,0,0,1
+                          db 0,6,0,4,0,2,0,1,0
+                          db 3,0,0,0,0,1,0,0,0
+                          db 0,0,7,0,3,8,2,0,4
+                          db 0,0,0,0,0,0,4,7,0
+                          db 0,3,0,5,0,0,1,0,0
+                          db 0,0,0,7,0,0,5,3,0
 
-easy_grid_sol:  db 8,3,2,4,9,6,1,5,7
-                db 7,4,5,2,1,8,3,9,6
-                db 1,9,6,7,5,3,2,8,4
-                db 3,7,8,9,6,2,4,1,5
-                db 4,2,9,1,8,5,7,6,3
-                db 5,6,1,3,7,4,9,2,8
-                db 2,5,7,6,4,9,8,3,1
-                db 9,8,4,5,3,1,6,7,2
-                db 6,1,3,8,2,7,5,4,9
+curr_grid:                times 81 db 0
 
-medium_grid_sol:  db 4,2,7,8,6,5,9,1,3
-                  db 9,1,5,2,4,3,6,8,7
-                  db 6,8,3,7,9,1,2,5,4
-                  db 1,3,2,5,8,6,4,7,9
-                  db 5,9,8,4,3,7,1,6,2
-                  db 7,6,4,9,1,2,5,3,8
-                  db 8,7,1,6,2,9,3,4,5
-                  db 3,4,9,1,5,8,7,2,6
-                  db 2,5,6,3,7,4,8,9,1
+easy_grid_sol:            db 8,3,2,4,9,6,1,5,7
+                          db 7,4,5,2,1,8,3,9,6
+                          db 1,9,6,7,5,3,2,8,4
+                          db 3,7,8,9,6,2,4,1,5
+                          db 4,2,9,1,8,5,7,6,3
+                          db 5,6,1,3,7,4,9,2,8
+                          db 2,5,7,6,4,9,8,3,1
+                          db 9,8,4,5,3,1,6,7,2
+                          db 6,1,3,8,2,7,5,4,9
 
-hard_grid_sol:  db 8,5,1,3,9,4,7,2,6
-                db 9,2,6,8,1,7,3,4,5
-                db 4,7,3,2,6,5,8,9,1
-                db 5,6,8,4,7,2,9,1,3
-                db 3,4,2,9,5,1,6,8,7
-                db 1,9,7,6,3,8,2,5,4
-                db 6,8,5,1,2,3,4,7,9
-                db 7,3,4,5,8,9,1,6,2
-                db 2,1,9,7,4,6,5,3,8
+medium_grid_sol:          db 4,2,7,8,6,5,9,1,3
+                          db 9,1,5,2,4,3,6,8,7
+                          db 6,8,3,7,9,1,2,5,4
+                          db 1,3,2,5,8,6,4,7,9
+                          db 5,9,8,4,3,7,1,6,2
+                          db 7,6,4,9,1,2,5,3,8
+                          db 8,7,1,6,2,9,3,4,5
+                          db 3,4,9,1,5,8,7,2,6
+                          db 2,5,6,3,7,4,8,9,1
 
-    
-undo_stack: times 81*4 db 0
-undo_stack_ptr: dw 242
+hard_grid_sol:            db 8,5,1,3,9,4,7,2,6
+                          db 9,2,6,8,1,7,3,4,5
+                          db 4,7,3,2,6,5,8,9,1
+                          db 5,6,8,4,7,2,9,1,3
+                          db 3,4,2,9,5,1,6,8,7
+                          db 1,9,7,6,3,8,2,5,4
+                          db 6,8,5,1,2,3,4,7,9
+                          db 7,3,4,5,8,9,1,6,2
+                          db 2,1,9,7,4,6,5,3,8
 
-notes_array: times 81*9 db 0
+;UNDO
+undo_stack:               times 81*4 db 0
+undo_stack_ptr:           dw 242
 
-bird_row: dw 17
-bird_col: dw 63
-movement_mode: dw 0
-bird: db "<//>"
+;NOTES
+notes_array:              times 81*9 db 0
 
-track: dw 3000, 4000, 5000, 4000, 3000 ; THIS IS THE TRACK FREQUENCY ARRAY
-track_d: dw 5, 6, 7, 6, 5              ; THIS IS THE TRACK DELAY ARRAY
-track_s: dw 5                          ; THIS IS THE TRACK SIZE
+;ANIMATION
+bird_row:                 dw 17
+bird_col:                 dw 63
+movement_mode:            dw 0
+bird:                     db "<//>"
 
-correct_input_track: dw 4000, 2000
-correct_input_track_d: dw 4, 4
-correct_input_track_s: dw 2
+;MUSIC
+track:                    dw 3000, 4000, 5000, 4000, 3000 ; THIS IS THE TRACK FREQUENCY ARRAY
+track_d:                  dw 5, 6, 7, 6, 5              ; THIS IS THE TRACK DELAY ARRAY
+track_s:                  dw 5                          ; THIS IS THE TRACK SIZE
 
-incorrect_input_track: dw 9000, 7000
-incorrect_input_track_d: dw 4, 4
-incorrect_input_track_s: dw 2
+correct_input_track:      dw 4000, 2000
+correct_input_track_d:    dw 4, 4
+correct_input_track_s:    dw 2
+
+incorrect_input_track:    dw 9000, 7000
+incorrect_input_track_d:  dw 4, 4
+incorrect_input_track_s:  dw 2
+
+row_col_track:            dw 7000, 4000, 7000    
+row_col_track_d:          dw 5, 6, 7                  
+row_col_track_s:          dw 3
 
 DELAY:  ;delay of 1/18.2 seconds
         push bp
@@ -403,6 +411,50 @@ return_cursor_location_on_screen:
   add sp, 4
   pop bp
 ret 4
+
+check_if_grid_complete:
+
+  ;FUNCTION NAME: CHECK IF GRID COMPLETE
+
+  ;[bp + 6] [1ST PARAM] - RETURN VALUE (0 - FALSE, 1 - TRUE)
+  ;[bp + 4] [2ND PARAM] - POINTER TO GRID
+
+  ;LOCAL VARIABLES: N/A
+
+  push bp
+  mov bp, sp
+  push ax
+  push cx
+  push es
+  push di
+
+  ;FUNCTION START
+  mov ax, ds
+  mov es, ax
+
+  mov di, number_cards
+  xor ax, ax
+  mov cx, 10
+
+  cld
+  repe scasw
+  
+  cmp cx, 0
+  jg return_0_cigc
+  mov word [bp + 6], 1
+  jmp end_cigc
+
+  return_0_cigc:
+  mov word [bp + 6], 0
+
+  ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
+  end_cigc:
+  pop di
+  pop es
+  pop cx
+  pop ax
+  pop bp
+ret 2
 
 print_notes_grid:
   ;FUNCTION NAME: PRINT NOTES GRID
@@ -688,19 +740,25 @@ check_row_completion:
   push cx
 
   ;FUNCTION START
-  push ds
-  pop es
+  mov ax, ds
+  mov es, ax
   
   mov ax, 9
   mul byte [bp + 4]
   mov di, ax
   add di, [bp + 6]
 
-  cld
   xor ax, ax
-  mov cx, 10
-  repne scasb
+  mov cx, 9
 
+  check_loop:
+    mov al, [es:di]
+    cmp al, 0
+    je exit_check_loop
+    inc di
+  loop check_loop
+
+  exit_check_loop:
   cmp cx, 0
   jg else_crc
   mov word [bp + 8], 1
@@ -736,8 +794,8 @@ check_column_completion:
   push cx
 
   ;FUNCTION START
-  push ds
-  pop es
+  mov ax, ds
+  mov es, ax
   
   mov di, [bp + 4]
   add di, [bp + 6]
@@ -784,6 +842,7 @@ add_score:
   push dx
 
   ;FUNCTION START
+  xor dx, dx
   mov ax, 10
   
   push 0
@@ -792,8 +851,8 @@ add_score:
   call check_row_completion
   pop dx
 
-  cmp dx, 1
-  jne else_as
+  cmp dx, 0
+  je else_as
   add ax, 10
 
   else_as:
@@ -1313,7 +1372,7 @@ print_text:
 
   number_print_loop:
     
-    push word [mode_text]
+    push word mode_text
     push ax
     push word [bp + 8]
     push word [bp + 6]
@@ -1506,7 +1565,7 @@ draw_mm:
 
   mov ah, 01110000b
 
-  push word [mode_text]
+  push word mode_text
   push sudoku
   push word main_theme
   push word 37
@@ -1520,7 +1579,7 @@ draw_mm:
   
   skip_pgf:
   
-  push word [mode_text]
+  push word mode_text
   push play_game
   push ax
   push word 35
@@ -1536,7 +1595,7 @@ draw_mm:
   
   skip_ef:
 
-  push word [mode_text]
+  push word mode_text
   push exit_s
   push ax
   push word 38
@@ -1580,7 +1639,7 @@ draw_ls:
 
   mov ah, 01110000b
 
-  push word [mode_text]
+  push word mode_text
   push level_select
   push word main_theme
   push word 34
@@ -1603,7 +1662,7 @@ draw_ls:
   mov word [score_multiplier], 3
   
   skip_lsf:
-  push word [mode_text]
+  push word mode_text
   push easy
   push ax
   push word 38
@@ -1628,7 +1687,7 @@ draw_ls:
   mov word [score_multiplier], 1
 
   skip_esf:
-  push word [mode_text]
+  push word mode_text
   push medium
   push ax
   push word 37
@@ -1653,7 +1712,7 @@ draw_ls:
   mov word [score_multiplier], 2
   
   skip_hf:
-  push word [mode_text]
+  push word mode_text
   push hard
   push ax
   push word 38
@@ -1699,7 +1758,7 @@ draw_es:
   mov word [bp - 8], 1111110000000000b
   
   ;FUNCTION START
-  push word [mode_text]
+  push word mode_text
   push word game_over_s
   push word [bp - 6]
   push word [bp - 2]
@@ -1709,7 +1768,7 @@ draw_es:
   add word [bp - 4], 2
   sub word [bp - 2], 5
 
-  push word [mode_text]
+  push word mode_text
   push word time_elapsed_s
   push word [bp - 6]
   push word [bp - 2]
@@ -1801,7 +1860,7 @@ draw_gs_te:
   mov word [bp - 4], 5
   
   ;FUNCTION START
-  push word [mode_text]
+  push word mode_text
   push difficulty_s ;PRINTING DIFFICULTY STAT
   push word [bp + 8]
   mov dx, [bp + 6]
@@ -1812,7 +1871,7 @@ draw_gs_te:
 
   add word [bp - 2], 1
 
-  push word [mode_text]
+  push word mode_text
   push word [difficulty]
   push word [bp + 8]
   mov dx, [bp + 6]
@@ -1823,7 +1882,7 @@ draw_gs_te:
 
   add word [bp - 2], 2
 
-  push word [mode_text]
+  push word mode_text
   push timer_s       ;PRINTING TIMER STAT
   push word [bp + 8]
   mov dx, [bp + 6]
@@ -1842,7 +1901,7 @@ draw_gs_te:
 
   add word [bp - 2], 2
 
-  push word [mode_text]
+  push word mode_text
   push score_s       ;PRINTING SCORE STAT
   push word [bp + 8]
   mov dx, [bp + 6]
@@ -1853,7 +1912,7 @@ draw_gs_te:
 
   add word [bp - 2], 1
 
-  push word [mode_number]
+  push word mode_number
   push score
   push word [bp + 8]
   mov dx, [bp + 6]
@@ -1864,7 +1923,7 @@ draw_gs_te:
 
   add word [bp - 2], 2
 
-  push word [mode_text]
+  push word mode_text
   push mistakes_s ;PRINTING MISTAKES STAT
   push word [bp + 8]
   mov dx, [bp + 6]
@@ -1875,7 +1934,7 @@ draw_gs_te:
 
   add word [bp - 2], 1
 
-  push word [mode_number]
+  push word mode_number
   push mistakes_left
   push word [bp + 8]
   mov dx, [bp + 6]
@@ -1886,7 +1945,7 @@ draw_gs_te:
 
   add word [bp - 2], 2
 
-  push word [mode_text]
+  push word mode_text
   push notes_s       ;PRINTING NOTES STAT
   push word [bp + 8]
   mov dx, [bp + 6]
@@ -1897,7 +1956,7 @@ draw_gs_te:
 
   add word [bp - 2], 1
 
-  push word [mode_text]
+  push word mode_text
   push word [current_notes_setting]
   push word [bp + 8]
   mov dx, [bp + 6]
@@ -2592,11 +2651,6 @@ nextcmp_6:
   cmp dl, al
   jne penalize_incorrect_input
 
-  push word [current_grid_ptr]
-  push word [cursor_row]
-  push word [cursor_col]
-  call add_score
-
   push 0
   push word [current_grid_ptr]
   push word [cursor_row]
@@ -2604,34 +2658,76 @@ nextcmp_6:
   call get_grid_value
   pop dx
 
-  push word [temp_value] ;SCORE ADDED FOR THE INPUT
-  push dx
-  push word [cursor_row]
-  push word [cursor_col]
-  call grow_undo_stack
-
   push word [current_grid_ptr]
   push word [cursor_row]
   push word [cursor_col]
   push ax
   call set_grid_value
 
+  push word [current_grid_ptr]
+  push word [cursor_row]
+  push word [cursor_col]
+  call add_score
+
+  push word [temp_value] ;SCORE ADDED FOR THE INPUT
+  push dx
+  push word [cursor_row]
+  push word [cursor_col]
+  call grow_undo_stack
+
   push 0
   push ax
   call update_number_card
 
-  push correct_input_track
-  push correct_input_track_d
-  push word [correct_input_track_s]
-  call play_track
-  jmp draw_gs_kbisr
+  push 0
+  push word [current_grid_ptr]
+  call check_if_grid_complete
+  pop dx
+  cmp dx, 0
+  je play_row_col_completion_sound
+  mov word [terminate_flag], 1
+  jmp nomatch
 
 penalize_incorrect_input:
   dec word [mistakes_left]
   cmp word [mistakes_left], 1
   jge play_mistake_sound
   mov word [terminate_flag], 1
-  jmp nomatch
+jmp nomatch
+
+play_row_col_completion_sound:
+  push 0
+  push word [current_grid_ptr]
+  push word [cursor_row]
+  call check_row_completion
+  pop dx
+
+  cmp dx, 1
+  je play_sound_prccs
+
+  push 0
+  push word [current_grid_ptr]
+  push word [cursor_col]
+  call check_column_completion
+  pop dx
+
+  cmp dx, 1
+  je play_sound_prccs
+  jmp play_correct_sound
+
+  play_sound_prccs:
+  push row_col_track
+  push row_col_track_d
+  push word [row_col_track_s]
+  call play_track
+jmp draw_gs_kbisr
+
+play_correct_sound:
+  push correct_input_track
+  push correct_input_track_d
+  push word [correct_input_track_s]
+  call play_track
+jmp draw_gs_kbisr
 
 play_mistake_sound:
   push incorrect_input_track
@@ -2683,8 +2779,15 @@ notes_kbisr:
   xor dx, dx
   in al, 0x60
 
+  cmp al, 0x48
+  je transfer_control_to_gs_kbisr
+  cmp al, 0x50
+  je transfer_control_to_gs_kbisr
+
   cmp al, 49
   jne nextcmp_notes_kbisr
+
+  transfer_control_to_gs_kbisr:
   push es
   push 0
   pop es
