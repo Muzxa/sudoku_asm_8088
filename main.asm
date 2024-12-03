@@ -42,6 +42,7 @@ terminate_flag:           dw 0
 notes_flag:               dw 0
 
 main_theme:               equ 0111000000000000b
+main_notes_theme:         equ 0111010000000000b
 notes_background:         equ 0001011100000000b
 
 tickcount:                dw 0
@@ -1117,7 +1118,7 @@ draw_grid:
     jmp skip_printing_uh
 
     print_notes_uh:
-    push main_theme
+    push main_notes_theme
     push cx
     push dx
     call print_notes_grid
