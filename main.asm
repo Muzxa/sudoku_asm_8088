@@ -6,7 +6,7 @@ off_screen_buffer:        times 2000 dw 0
 overflow_buffer:          times 20 dw 0
 
 sudoku:                   db 'SUDOKU', 0
-play_game:                db 'PLAY  GAME', 0
+play_game:                db 'PLAY', 0
 exit_s:                   db 'EXIT', 0
 level_select:             db 'LEVEL SELECT', 0
 easy:                     db 'EASY', 0
@@ -14,9 +14,10 @@ medium:                   db 'MEDIUM', 0
 hard:                     db 'HARD', 0
 difficulty_s:             db 'DIFFICULTY: ', 0
 score_s:                  db 'SCORE: ', 0
-mistakes_s:               db 'MISTAKES LFT: ', 0
-timer_s:                  db 'TIMER: ', 0
+mistakes_s:               db 'MISTAKES: ', 0
+timer_s:                  db 'TIME: ', 0
 notes_s:                  db 'NOTES: ', 0
+notes_s_theme:            dw main_theme
 off_s                     db 'OFF', 0
 on_s                      db 'ON', 0
 game_over_s:              db 'GAME OVER', 0
@@ -41,9 +42,17 @@ ncs_flag:                 dw 0
 terminate_flag:           dw 0
 notes_flag:               dw 0
 
-main_theme:               equ 0111000000000000b
-main_notes_theme:         equ 0111010000000000b
-notes_background:         equ 0001011100000000b
+main_theme:               equ 0000111100000000b
+main_notes_theme:         equ 0000010000000000b
+notes_background:         equ 0100111100000000b
+current_selection_theme:  equ 1000010000000000b
+highlight_theme:          equ 0000010000000000b
+clear_screen_theme:       equ 0000011100000000b
+horizontal_subline_char:  equ '*'
+vertical_subline_char:    equ '*'
+cursor_sel_attr_byte:     equ 11001111b
+cursor_icon:              equ '_'
+line_theme:               equ 0111000000000000b
 
 tickcount:                dw 0
 seconds:                  dw 59
@@ -137,27 +146,21 @@ undo_stack_ptr:           dw 242
 ;NOTES
 notes_array:              times 81*9 db 0
 
-;ANIMATION
-bird_row:                 dw 17
-bird_col:                 dw 63
-movement_mode:            dw 0
-bird:                     db "<//>"
-
 ;MUSIC
-track:                    dw 3000, 4000, 5000, 4000, 3000 ; THIS IS THE TRACK FREQUENCY ARRAY
-track_d:                  dw 5, 6, 7, 6, 5              ; THIS IS THE TRACK DELAY ARRAY
-track_s:                  dw 5                          ; THIS IS THE TRACK SIZE
+track:                    dw 6000, 4000, 5000, 4000, 6000, 4000, 5000, 6000 ; THIS IS THE TRACK FREQUENCY ARRAY
+track_d:                  dw 5, 6, 7, 6, 5, 6, 7, 6                         ; THIS IS THE TRACK DELAY ARRAY
+track_s:                  dw 8                                              ; THIS IS THE TRACK SIZE
 
-correct_input_track:      dw 4000, 2000
+correct_input_track:      dw 3500, 3000
 correct_input_track_d:    dw 4, 4
 correct_input_track_s:    dw 2
 
-incorrect_input_track:    dw 9000, 7000
+incorrect_input_track:    dw 6500, 6000
 incorrect_input_track_d:  dw 4, 4
 incorrect_input_track_s:  dw 2
 
-row_col_track:            dw 7000, 4000, 7000    
-row_col_track_d:          dw 5, 6, 7                  
+row_col_track:            dw 3000, 4000, 5500    
+row_col_track_d:          dw 4, 4, 7                  
 row_col_track_s:          dw 3
 
 DELAY:  ;delay of 1/18.2 seconds
@@ -250,69 +253,6 @@ play_track:
   pop ax
   pop bp
 ret 6
-
-update_bird_pos:
-
-  cmp word [bird_row], 24
-  jb else_ubp_3
-  mov word [movement_mode],0
-  mov word [bird_row], 17
-  mov word [bird_col], 63
-  jmp exit_ubp
-
-  else_ubp_3:
-  cmp word [bird_col], 75
-  jb else_ubp_2
-  inc word [bird_row]
-  mov word [movement_mode], 1
-
-  else_ubp_2:
-  cmp word [bird_col], 63
-  ja update_pos
-  inc word [bird_row]
-  mov word [movement_mode], 0
-
-  update_pos:
-  cmp word [movement_mode], 0
-  jne else_ubp_1
-  add word [bird_col], 2
-  jmp exit_ubp
-
-  else_ubp_1:
-  sub word [bird_col], 2
-  exit_ubp:
-ret
-
-draw_bird:
-  push bp
-  mov bp, sp
-  pusha
-
-  push ds
-  pop es
-  
-  mov ax, 80
-  mul byte [bird_row]
-  add word ax, [bird_col]
-  shl ax, 1
-  mov di, ax
-  add di, off_screen_buffer
-
-  mov si, bird
-  mov cx, 4
-
-  draw_bird_loop:
-    xor ax, ax
-    mov ax, main_theme
-    mov al, [si]
-    mov [es:di], ax
-    inc si
-    add di, 2
-  loop draw_bird_loop
-
-  popa
-  pop bp
-ret
 
 toggle_note:
   ;FUNCTION NAME: TOGGLE NOTE
@@ -1108,9 +1048,9 @@ draw_grid:
     cmp byte [si], 0
     je print_notes_uh
 
+    mov ax, main_theme
     mov al, [si]
     add al, '0'
-    mov ah, 01110000b
     push ax
     push cx
     push dx
@@ -1143,9 +1083,9 @@ draw_grid:
       cmp byte [si], 0
       je print_notes_lh
 
+      mov ax, main_theme
       mov al, [si]
       add al, '0'
-      mov ah, 01110000b
       push ax
       push cx
       push dx
@@ -1564,42 +1504,85 @@ draw_mm:
   mov ax, 0xb800
   mov es, ax
 
-  mov ah, 01110000b
+  mov ax, main_theme
+
+  push 2
+  push 8
+  mov al, horizontal_subline_char
+  push ax
+  push 37
+  push 10
+  call draw_line
+
+  push 2
+  push 8
+  mov al, horizontal_subline_char
+  push ax
+  push 37
+  push 15
+  call draw_line
+
+  push 2
+  push 8
+  mov al, horizontal_subline_char
+  push ax
+  push 37
+  push 12
+  call draw_line
+
+  push 160
+  push 6
+  mov al, horizontal_subline_char
+  push ax
+  push 36
+  push 10
+  call draw_line
+
+  push 160
+  push 6
+  mov al, horizontal_subline_char
+  push ax
+  push 45
+  push 10
+  call draw_line
+
+  mov ax, main_theme
+
 
   push word mode_text
   push sudoku
-  push word main_theme
-  push word 37
+  push main_theme
+  push word 38
   push word 11
   call print_text
 
   cmp word [gen_flag], 0
   jne skip_pgf
 
-  mov ah, 11111100b
+  mov ax, current_selection_theme
   
   skip_pgf:
   
   push word mode_text
   push play_game
   push ax
-  push word 35
+  push word 39
   push word 13
   call print_text
 
-  mov ah, 01110000b
+  mov ax, main_theme
 
   cmp word [gen_flag], 1
   jne skip_ef
 
-  mov ah, 11111100b
+  mov ax, current_selection_theme
   
   skip_ef:
 
   push word mode_text
   push exit_s
   push ax
-  push word 38
+  push word 39
   push word 14
   call print_text
 
@@ -1638,7 +1621,7 @@ draw_ls:
   mov ax, 0xb800
   mov es, ax
 
-  mov ah, 01110000b
+  mov ax, main_theme
 
   push word mode_text
   push level_select
@@ -1649,7 +1632,7 @@ draw_ls:
 
   cmp word [gen_flag], 0
   jne skip_lsf
-  mov ah, 11111100b
+  mov ax, current_selection_theme
   mov word [difficulty], hard
   push hard_grid
   push curr_grid
@@ -1670,12 +1653,12 @@ draw_ls:
   push word 12
   call print_text
 
-  mov ah, 01110000b
+  mov ax, main_theme
 
   cmp word [gen_flag], 1
   jne skip_esf
 
-  mov ah, 11111100b
+  mov ax, current_selection_theme
   mov word [difficulty], easy
   push easy_grid
   push curr_grid
@@ -1695,12 +1678,12 @@ draw_ls:
   push word 13
   call print_text
 
-  mov ah, 01110000b
+  mov ax, main_theme
 
   cmp word [gen_flag], 2
   jne skip_hf
 
-  mov ah, 11111100b
+  mov ax, current_selection_theme
   mov word [difficulty], medium
   push medium_grid
   push curr_grid
@@ -1756,7 +1739,7 @@ draw_es:
   mov word [bp - 2], 37
   mov word [bp - 4], 10
   mov word [bp - 6], main_theme
-  mov word [bp - 8], 1111110000000000b
+  mov word [bp - 8], current_selection_theme
   
   ;FUNCTION START
   push word mode_text
@@ -1857,7 +1840,7 @@ draw_gs_te:
   push cx
   push dx
 
-  mov word [bp - 2], 1
+  mov word [bp - 2], 5
   mov word [bp - 4], 5
   
   ;FUNCTION START
@@ -1959,7 +1942,7 @@ draw_gs_te:
 
   push word mode_text
   push word [current_notes_setting]
-  push word [bp + 8]
+  push word [notes_s_theme]
   mov dx, [bp + 6]
   add dx, [bp - 4]
   push dx
@@ -1967,15 +1950,6 @@ draw_gs_te:
   call print_text
 
   add word [bp - 2], 2
-
-  push 2
-  push 19
-  push 0000000000000000b
-  push word [bp + 6]
-  push word [bp - 2]
-  call draw_line
-
-  call draw_bird
 
   ;FUNCTION END - RESTORING REGISTERS AND COLLAPSING STACK
   pop dx
@@ -2051,7 +2025,7 @@ draw_ncs:
 
     push 1
     push bx
-    push main_theme
+    push highlight_theme
     push ax
     push word [bp - 2]
     call print_text
@@ -2111,7 +2085,7 @@ draw_gs:
   mov word [bp - 4],  0
   mov word [bp - 6],  61
   mov word [bp - 8],  25
-  mov word [bp - 10], 0000000000000000b
+  mov word [bp - 10], line_theme
   mov word [bp - 12], main_theme
   mov word [bp - 18], 59
 
@@ -2148,7 +2122,7 @@ draw_gs:
       push word 2
       push word [bp - 18]
       mov  dx, [bp - 12];CHANGE HERE
-      mov  dl, 00101101b
+      mov  dl, horizontal_subline_char
       push dx
       push word [bp - 2]
       push word ax
@@ -2198,7 +2172,7 @@ draw_gs:
       push word 160
       push word [bp - 16]
       mov  dx, [bp - 12]
-      mov  dl, 01111100b
+      mov  dl, vertical_subline_char
       push dx
       push ax
 
@@ -2256,11 +2230,11 @@ draw_gs:
   push word [cursor_col]
   call get_grid_value
   pop ax
-  mov ah, 10010111b;
+  mov ah, cursor_sel_attr_byte;
   add al, '0'
   cmp al, '0'
   jne cell_occupied
-  mov al, '*'
+  mov al, cursor_icon
   cell_occupied:
   push ax
   push word [cursor_row]
@@ -2338,7 +2312,7 @@ refresh_side_screen:
   refresh_side_screen_loop:
   push 160
   push word [bp - 4]
-  push 0111111100000000b
+  push main_theme
   push word [bp - 2]
   push 0
   call draw_line
@@ -2372,7 +2346,7 @@ clear_screen:
   mov bp, sp
 
   ;FUNCTION START
-  push 0000111100000000b
+  push clear_screen_theme
   push 01h
   call draw_bg
 
@@ -2397,7 +2371,7 @@ refresh_buffer:
   mov bp, sp
 
   ;FUNCTION START
-  push 0111111100000000b
+  push main_theme
   push 01h
   call draw_bg_to_buffer
   
@@ -2423,7 +2397,7 @@ clear_buffer:
   mov bp, sp
 
   ;FUNCTION START
-  push 0000111100000000b
+  push clear_screen_theme
   push 01h
   call draw_bg_to_buffer
 
@@ -2461,7 +2435,7 @@ draw_timer:
 
   push 1
   push word zero
-  push 0111000000000000b
+  push main_theme
   push cx
   push word [bp + 4]
   call print_text
@@ -2470,7 +2444,7 @@ draw_timer:
   skip:
   push 1
   push word minutes
-  push 0111000000000000b
+  push main_theme
   push word [bp + 6]
   push word [bp + 4]
   call print_text
@@ -2479,14 +2453,14 @@ draw_timer:
 
   push 0
   push word colon
-  push 0111000000000000b
+  push main_theme
   push word [bp + 6]
   push word [bp + 4]
   call print_text
   
   push 1
   push word seconds
-  push 0111000000000000b
+  push main_theme
   push cx
   push word [bp + 4]
   call print_text
@@ -2515,8 +2489,6 @@ timer_isr:
   cmp word [tickcount], 18
   jne skip_drawing_timer
 
-  call update_bird_pos
-
   dec word [seconds]
   mov word [tickcount], 0
 
@@ -2531,7 +2503,7 @@ timer_isr:
     jne skip_drawing_timer
 
     push word 66
-    push word 5
+    push word 9
     call draw_timer
   
   ;FUNCTION END - SIGNALING THE END OF THE INTERRUPT SERVICE ROUTINE
@@ -2625,6 +2597,7 @@ nextcmp_5:
   pop es
 
   mov word [current_notes_setting], on_s
+  mov word [notes_s_theme], highlight_theme
   mov word [notes_flag], 1
   jmp draw_gs_kbisr
 
@@ -2798,6 +2771,7 @@ notes_kbisr:
   sti
   pop es
   mov word [current_notes_setting], off_s
+  mov word [notes_s_theme], main_theme
   mov word [notes_flag], 0
   jmp draw_gs_notes_isr
 
